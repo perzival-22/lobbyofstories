@@ -1,0 +1,145 @@
+/*
+ * scene-header.css
+ *
+ * Styles for <SceneHeader /> — the metadata card shown at the top of each
+ * reader scene. Import this in your global CSS or the reader layout.
+ *
+ * Works on the dark reader background (#0d0d0f or similar).
+ * All values are CSS-variable-aware so they inherit the site theme.
+ */
+
+/* ── Wrapper ─────────────────────────────────────────────────────────────── */
+
+.scene-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 0;
+  user-select: none;
+}
+
+/* ── Episode label ───────────────────────────────────────────────────────── */
+
+.scene-header__episode {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono, 'JetBrains Mono', 'Fira Code', monospace);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.scene-header__ep-number {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+}
+
+.scene-header__ep-divider {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.scene-header__ep-title {
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 0.7rem;
+}
+
+/* ── Scene title ─────────────────────────────────────────────────────────── */
+
+.scene-header__title {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: clamp(0.9rem, 2vw, 1.05rem);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  line-height: 1.2;
+}
+
+/* ── Metadata row ────────────────────────────────────────────────────────── */
+
+.scene-header__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  margin-top: 0.25rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-left-width: 2px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+
+  /* Default left border color — overridden inline by TYPE color */
+  border-left-color: rgba(148, 163, 184, 0.3);
+}
+
+/* ── Type badge ──────────────────────────────────────────────────────────── */
+
+.scene-header__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  /* color and border-color applied inline from TYPE_CONFIG */
+}
+
+/* ── Individual meta items (location / age / time) ───────────────────────── */
+
+.scene-header__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 0.78rem;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1;
+}
+
+.scene-header__meta-item svg {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+/* Separator dot between meta items (CSS-only, no extra markup) */
+.scene-header__meta-item + .scene-header__meta-item::before {
+  content: "·";
+  color: rgba(255, 255, 255, 0.2);
+  margin-right: 0.65rem;
+  font-style: normal;
+}
+
+/* ── Divider rule ─────────────────────────────────────────────────────────── */
+
+.scene-header__rule {
+  width: 2.5rem;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin-top: 0.5rem;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .scene-header__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .scene-header__meta-item + .scene-header__meta-item::before {
+    display: none;
+  }
+}
