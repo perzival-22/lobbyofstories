@@ -5,8 +5,14 @@ export const dynamic = 'force-dynamic'
 
 export default async function AdminBooksPage() {
   const books = await prisma.book.findMany({
-    orderBy: { updatedAt: 'desc' },
-    include: { _count: { select: { chapters: true } } },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      series: true,
+      genre: true,
+      _count: { select: { chapters: true } },
+    },
   })
 
   return (

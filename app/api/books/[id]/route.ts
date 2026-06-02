@@ -67,9 +67,13 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       await prisma.chapter.deleteMany({ where: { bookId: id } })
       updateData.chapters = {
         create: parsed.map((ch, i) => ({
+          order: i + 1,
+          episodeNumber: 1,
+          episodeTitle: ch.title,
+          sceneNumber: i + 1,
+          sceneHeading: ch.title.toUpperCase(),
           title: ch.title,
           content: ch.content,
-          order: i + 1,
         })),
       }
     }

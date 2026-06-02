@@ -35,7 +35,7 @@ export default async function BookDetailPage({ params }: Props) {
           userId: user.id,
           chapterId: { in: book.chapters.map(c => c.id) },
         },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { lastReadAt: 'desc' },
       })
       if (progress.length > 0) {
         // Prefer the most recently touched in-progress chapter;

@@ -27,11 +27,14 @@ model User {
 
 model Book {
   id          String   @id @default(cuid())
-  slug        String   @unique          // e.g. "valerie-klas-origins"
-  title       String                    // e.g. "Valerie Klaś: Origins"
+  slug        String?  @unique
+  title       String
+  author      String   @default("Kelvin Wilch")
   description String?
-  coverUrl    String?                   // Vercel Blob URL
-  published   Boolean  @default(false)
+  coverUrl    String?
+  series      String?
+  genre       String?
+  status      String   @default("DRAFT")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -49,12 +52,12 @@ model Chapter {
   order   Int    // Global order across the whole book (1, 2, 3 ... N)
 
   // ── Episode info ──────────────────────────────────────────────────────────
-  episodeNumber Int     // e.g. 1
-  episodeTitle  String  // e.g. "The Weight of Normal"
+  episodeNumber Int    @default(1)
+  episodeTitle  String @default("")
 
   // ── Scene info ────────────────────────────────────────────────────────────
-  sceneNumber  Int     // e.g. 1 (resets per episode)
-  sceneHeading String  // e.g. "SCENE 1 | THE EDGE"
+  sceneNumber  Int    @default(1)
+  sceneHeading String @default("")
   title        String  // e.g. "THE EDGE"
 
   // ── Scene metadata (extracted from the formatted text header block) ───────
@@ -82,8 +85,9 @@ model ReadingProgress {
   chapterId String
   chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
-  progress     Float    // 0.0 – 1.0 scroll fraction
-  lastReadAt   DateTime @default(now()) @updatedAt
+  scrollPosition Float   @default(0)
+  completed      Boolean @default(false)
+  lastReadAt     DateTime @default(now()) @updatedAt
 
   @@unique([userId, chapterId])
   @@index([userId])
