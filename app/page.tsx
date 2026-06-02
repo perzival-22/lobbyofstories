@@ -21,8 +21,8 @@ export default async function HomePage() {
           Welcome to the Lobby
         </p>
         <h2 className="text-5xl mb-6 leading-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
-          Stories worth<br />
-          <em>sitting with.</em>
+          Stories to get lost in.<br />
+          <em>Worlds worth exploring.</em>
         </h2>
         <p className="text-lg max-w-xl mx-auto" style={{ color: 'var(--muted)' }}>
           Original fiction, serialized and growing. Take a seat. The story is already in progress.

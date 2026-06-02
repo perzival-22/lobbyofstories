@@ -1,64 +1,90 @@
+// prisma/schema.prisma
+//
+// Run after changes:
+//   npx prisma migrate dev --name add_scene_metadata
+//   npx prisma generate
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  url       = env("DATABASE_URL")          // Neon pooled connection
+  directUrl = env("DATABASE_URL_UNPOOLED") // Neon direct (for migrations)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 model User {
-  id              String            @id @default(cuid())
-  clerkId         String            @unique
-  email           String            @unique
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  createdAt DateTime @default(now())
+
   readingProgress ReadingProgress[]
 }
 
 model Book {
-  id          String    @id @default(cuid())
-  title       String
-  author      String    @default("Kelvin Wilch")
-  description String?   @db.Text
-  coverUrl    String?
-  series      String?
-  genre       String?
-  status      BookStatus @default(DRAFT)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  chapters    Chapter[]
+  id          String   @id @default(cuid())
+  slug        String   @unique          // e.g. "valerie-klas-origins"
+  title       String                    // e.g. "Valerie Klaś: Origins"
+  description String?
+  coverUrl    String?                   // Vercel Blob URL
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  chapters Chapter[]
 }
 
+// Chapter = one Scene in the reader.
+// Episodes group scenes via episodeNumber/episodeTitle fields.
 model Chapter {
-  id              String            @id @default(cuid())
-  bookId          String
-  title           String
-  content         String            @db.Text
-  order           Int
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  book            Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  bookId  String
+  book    Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  // ── Ordering ──────────────────────────────────────────────────────────────
+  order   Int    // Global order across the whole book (1, 2, 3 ... N)
+
+  // ── Episode info ──────────────────────────────────────────────────────────
+  episodeNumber Int     // e.g. 1
+  episodeTitle  String  // e.g. "The Weight of Normal"
+
+  // ── Scene info ────────────────────────────────────────────────────────────
+  sceneNumber  Int     // e.g. 1 (resets per episode)
+  sceneHeading String  // e.g. "SCENE 1 | THE EDGE"
+  title        String  // e.g. "THE EDGE"
+
+  // ── Scene metadata (extracted from the formatted text header block) ───────
+  sceneType     String?  // e.g. "Cold Open", "Present", "Flashback", "Past"
+  sceneLocation String?  // e.g. "Caelford Rooftop, Downtown"
+  sceneAge      String?  // e.g. "22"
+  sceneTime     String?  // e.g. "7:42 PM" or "Last Night · 11:17 PM"
+
+  // ── Prose body ────────────────────────────────────────────────────────────
+  content String  // Prose only — NO metadata lines in here
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   readingProgress ReadingProgress[]
 
   @@unique([bookId, order])
+  @@index([bookId, episodeNumber])
 }
 
 model ReadingProgress {
-  id             String   @id @default(cuid())
-  userId         String
-  chapterId      String
-  scrollPosition Float    @default(0)
-  completed      Boolean  @default(false)
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chapter        Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapterId String
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  progress     Float    // 0.0 – 1.0 scroll fraction
+  lastReadAt   DateTime @default(now()) @updatedAt
 
   @@unique([userId, chapterId])
-}
-
-enum BookStatus {
-  DRAFT
-  PUBLISHED
+  @@index([userId])
 }
