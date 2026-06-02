@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #1a1714;
+  --paper: #f5f0e8;
+  --parchment: #ede8dd;
+  --gold: #c9a84c;
+  --gold-dim: #8a6f30;
+  --muted: #7a746a;
+  --border: #d4cfc6;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--ink);
+  color: var(--paper);
+  font-family: 'Lora', Georgia, serif;
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', Georgia, serif;
+  line-height: 1.2;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--ink); }
+::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }
+
+/* Reader prose */
+.prose-reader {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1.125rem;
+  line-height: 1.9;
+  color: var(--paper);
+  max-width: 68ch;
+  margin: 0 auto;
+}
+
+.prose-reader p {
+  margin-bottom: 1.5em;
+  text-indent: 2em;
+}
+
+.prose-reader p:first-of-type {
+  text-indent: 0;
+}
