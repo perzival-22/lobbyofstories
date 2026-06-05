@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/db'
 import { auth } from '@clerk/nextjs/server'
 import SiteHeader from '@/components/SiteHeader'
+import SiteFooter from '@/components/SiteFooter'
 
 export const dynamic = 'force-dynamic'
 
@@ -161,6 +162,8 @@ export default async function BookDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
+
+      <SiteFooter />
     </div>
   )
 }

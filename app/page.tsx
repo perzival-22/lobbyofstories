@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/db'
 import SiteHeader from '@/components/SiteHeader'
+import SiteFooter from '@/components/SiteFooter'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,6 +80,8 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+
+      <SiteFooter />
     </div>
   )
 }

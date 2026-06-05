@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import SiteHeader from '@/components/SiteHeader'
+import SiteFooter from '@/components/SiteFooter'
 import DiscoverClient from './DiscoverClient'
 
 export const dynamic = 'force-dynamic'
@@ -28,6 +29,7 @@ export default async function DiscoverPage() {
         </div>
         <DiscoverClient books={books} genres={genres} series={series} />
       </div>
+      <SiteFooter />
     </div>
   )
 }
