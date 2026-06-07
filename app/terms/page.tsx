@@ -415,13 +415,12 @@ export default function TermsPage() {
               className="text-lg mb-3 tracking-wide"
               style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
             >
-              13. Governing Law
+              13. Severability
             </h2>
             <p style={{ color: 'var(--muted)' }}>
-              These Terms shall be governed by and construed in accordance with the laws of the
-              Republic of Kenya, without regard to its conflict of law provisions. Any disputes
-              arising from or related to these Terms or your use of the Platform shall be subject to
-              the exclusive jurisdiction of the courts of Kenya.
+              If any provision of these Terms is found to be unlawful, void, or unenforceable, that
+              provision shall be deemed severable from these Terms and shall not affect the validity
+              and enforceability of the remaining provisions.
             </p>
           </section>
 
@@ -431,22 +430,7 @@ export default function TermsPage() {
               className="text-lg mb-3 tracking-wide"
               style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
             >
-              14. Severability
-            </h2>
-            <p style={{ color: 'var(--muted)' }}>
-              If any provision of these Terms is found to be unlawful, void, or unenforceable, that
-              provision shall be deemed severable from these Terms and shall not affect the validity
-              and enforceability of the remaining provisions.
-            </p>
-          </section>
-
-          {/* 15 */}
-          <section>
-            <h2
-              className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
-            >
-              15. Contact
+              14. Contact
             </h2>
             <p style={{ color: 'var(--muted)' }}>
               If you have any questions, concerns, or requests regarding these Terms, please reach

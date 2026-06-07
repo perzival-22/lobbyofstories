@@ -46,6 +46,16 @@ a {
 ::-webkit-scrollbar-track { background: var(--ink); }
 ::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }
 
+/* Landing page swipe animation */
+@keyframes lobby-swipe-bounce {
+  0%, 100% { transform: translateX(0); opacity: 0.7; }
+  55% { transform: translateX(6px); opacity: 1; }
+}
+
+.lobby-swipe-arrows {
+  animation: lobby-swipe-bounce 1.8s ease-in-out infinite;
+}
+
 /* Reader prose */
 .prose-reader {
   font-family: 'Lora', Georgia, serif;
