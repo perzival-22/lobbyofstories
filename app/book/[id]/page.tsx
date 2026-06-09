@@ -1,13 +1,33 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
+import type { Metadata } from 'next'
 import { prisma } from '@/lib/db'
 import { auth } from '@clerk/nextjs/server'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 type Props = { params: Promise<{ id: string }> }
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params
+  const book = await prisma.book.findUnique({
+    where: { id, status: 'PUBLISHED' },
+    select: { title: true, description: true, coverUrl: true },
+  })
+  if (!book) return { title: 'Story not found' }
+  return {
+    title: `${book.title} — Lobby of Stories`,
+    description: book.description ?? `Read ${book.title} on Lobby of Stories.`,
+    openGraph: {
+      title: book.title,
+      description: book.description ?? `Read ${book.title} on Lobby of Stories.`,
+      images: book.coverUrl ? [{ url: book.coverUrl }] : [],
+    },
+  }
+}
 
 export default async function BookDetailPage({ params }: Props) {
   const { id } = await params
@@ -18,7 +38,7 @@ export default async function BookDetailPage({ params }: Props) {
     include: {
       chapters: {
         orderBy: { order: 'asc' },
-        select: { id: true, title: true, order: true },
+        select: { id: true, title: true, order: true, content: true },
       },
     },
   })
@@ -68,11 +88,11 @@ export default async function BookDetailPage({ params }: Props) {
           {/* Cover */}
           <div className="flex-shrink-0 w-full md:w-56">
             <div
-              className="aspect-[2/3] overflow-hidden"
+              className="aspect-[2/3] relative overflow-hidden"
               style={{ background: '#22201c', border: '1px solid #2a2520' }}
             >
               {book.coverUrl ? (
-                <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                <Image src={book.coverUrl} alt={book.title} fill priority className="object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-6 text-center">
                   <span className="text-2xl leading-snug" style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold-dim)' }}>
@@ -97,12 +117,15 @@ export default async function BookDetailPage({ params }: Props) {
 
             {book.genre && (
               <span
-                className="inline-block text-xs px-3 py-1 tracking-widest uppercase mb-6"
+                className="inline-block text-xs px-3 py-1 tracking-widest uppercase mb-3"
                 style={{ border: '1px solid #3a3530', color: 'var(--muted)' }}
               >
                 {book.genre}
               </span>
             )}
+            <p className="text-xs mb-6" style={{ color: 'var(--muted)' }}>
+              Last updated {new Date(book.updatedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </p>
 
             {book.description && (
               <p className="text-base leading-relaxed mb-8" style={{ color: 'var(--paper)', maxWidth: '58ch' }}>
@@ -133,32 +156,39 @@ export default async function BookDetailPage({ params }: Props) {
             Table of Contents
           </p>
           <div className="flex flex-col">
-            {book.chapters.map((chapter, i) => (
-              <Link
-                key={chapter.id}
-                href={`/book/${book.id}/read?chapter=${chapter.id}`}
-                className="flex items-center gap-6 px-5 py-4 text-sm transition-colors hover:text-white group"
-                style={{
-                  borderTop: i === 0 ? '1px solid #2a2520' : 'none',
-                  borderBottom: '1px solid #2a2520',
-                  color: 'var(--muted)',
-                }}
-              >
-                <span
-                  className="text-xs flex-shrink-0"
-                  style={{ color: 'var(--gold-dim)', minWidth: '2.5rem', fontVariantNumeric: 'tabular-nums' }}
+            {book.chapters.map((chapter, i) => {
+              const wordCount = chapter.content.split(/\s+/).length
+              const readMins = Math.ceil(wordCount / 200)
+              return (
+                <Link
+                  key={chapter.id}
+                  href={`/book/${book.id}/read?chapter=${chapter.id}`}
+                  className="flex items-center gap-6 px-5 py-4 text-sm transition-colors hover:text-white group"
+                  style={{
+                    borderTop: i === 0 ? '1px solid #2a2520' : 'none',
+                    borderBottom: '1px solid #2a2520',
+                    color: 'var(--muted)',
+                  }}
                 >
-                  {String(chapter.order).padStart(2, '0')}
-                </span>
-                <span className="flex-1 group-hover:text-white transition-colors">{chapter.title}</span>
-                <span
-                  className="text-xs tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ color: 'var(--gold-dim)' }}
-                >
-                  Read →
-                </span>
-              </Link>
-            ))}
+                  <span
+                    className="text-xs flex-shrink-0"
+                    style={{ color: 'var(--gold-dim)', minWidth: '2.5rem', fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {String(chapter.order).padStart(2, '0')}
+                  </span>
+                  <span className="flex-1 group-hover:text-white transition-colors">{chapter.title}</span>
+                  <span className="text-xs flex-shrink-0" style={{ color: 'var(--muted)' }}>
+                    ~{readMins} min
+                  </span>
+                  <span
+                    className="text-xs tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ color: 'var(--gold-dim)' }}
+                  >
+                    Read →
+                  </span>
+                </Link>
+              )
+            })}
           </div>
         </div>
       </div>

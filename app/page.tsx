@@ -152,6 +152,33 @@ export default function LandingPage() {
               <br />
               Take a seat. The story is already in progress.
             </p>
+            <button
+              aria-label="Browse stories"
+              onClick={(e) => {
+                e.stopPropagation()
+                triggerTurn()
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                marginTop: '2.5rem',
+                background: 'transparent',
+                border: '1px solid var(--gold)',
+                color: 'var(--gold)',
+                fontFamily: 'Lora, serif',
+                fontSize: '0.7rem',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                padding: '10px 28px',
+                cursor: 'pointer',
+                opacity: mounted && !turning ? 1 : 0,
+                transition: 'opacity 0.5s, background 0.2s',
+                pointerEvents: turning ? 'none' : 'auto',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(201,168,76,0.08)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+            >
+              Browse Stories
+            </button>
           </div>
 
           {/* Swipe indicator */}

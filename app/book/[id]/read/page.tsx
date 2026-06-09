@@ -47,11 +47,16 @@ export default async function ReaderPage({ params, searchParams }: Props) {
     }
   }
 
+  const chaptersWithWordCount = book.chapters.map(ch => ({
+    ...ch,
+    wordCount: ch.content.split(/\s+/).length,
+  }))
+
   return (
     <ReaderClient
       bookId={book.id}
       bookTitle={book.title}
-      chapters={book.chapters}
+      chapters={chaptersWithWordCount}
       initialChapterId={initialChapter.id}
       progressMap={progressMap}
       isSignedIn={!!userId}

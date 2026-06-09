@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { SignInButton } from '@clerk/nextjs'
 import type { ProgressEntry } from './page'
 
 type Chapter = {
@@ -10,6 +11,7 @@ type Chapter = {
   title: string
   order: number
   content: string
+  wordCount?: number
 }
 
 type Props = {
@@ -34,8 +36,10 @@ export default function ReaderClient({
   const [currentChapterId, setCurrentChapterId] = useState(initialChapterId)
   const [fontSize, setFontSize] = useState(18)
   const [showTOC, setShowTOC] = useState(false)
+  const [readProgress, setReadProgress] = useState(0)
+  const [backHref, setBackHref] = useState(`/book/${bookId}`)
+  const [backLabel, setBackLabel] = useState('← Back')
 
-  // Merge server-provided progress with live updates (keeps TOC checkmarks current)
   const [localProgress, setLocalProgress] = useState<Record<string, ProgressEntry>>(progressMap)
 
   const contentRef = useRef<HTMLDivElement>(null)
@@ -46,12 +50,37 @@ export default function ReaderClient({
   const prevChapter = currentIndex > 0 ? chapters[currentIndex - 1] : null
   const nextChapter = currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null
 
+  // TASK-02: Restore font size from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('reader-font-size')
+      if (stored) {
+        const parsed = parseInt(stored, 10)
+        if (!isNaN(parsed)) setFontSize(parsed)
+      }
+    } catch {}
+  }, [])
+
+  // TASK-02: Persist font size to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('reader-font-size', String(fontSize))
+    } catch {}
+  }, [fontSize])
+
+  // TASK-14: Detect referrer for back navigation
+  useEffect(() => {
+    if (document.referrer.includes('/discover')) {
+      setBackHref('/discover')
+      setBackLabel('← Discover')
+    }
+  }, [])
+
   // ------- Progress Saving -------
 
   const saveProgress = useCallback(
     (chapterId: string, scrollPosition: number, completed: boolean) => {
       if (!isSignedIn) return
-      // Optimistic local update so TOC checkmarks update without waiting for the server
       setLocalProgress(prev => ({ ...prev, [chapterId]: { scrollPosition, completed } }))
       fetch('/api/progress', {
         method: 'POST',
@@ -70,6 +99,8 @@ export default function ReaderClient({
     if (maxScroll <= 0) return
     const position = el.scrollTop / maxScroll
     const completed = position > 0.95
+    // TASK-05: Update progress bar
+    setReadProgress(Math.round((el.scrollTop / maxScroll) * 100))
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     saveTimeoutRef.current = setTimeout(() => {
       saveProgress(currentChapterId, position, completed)
@@ -80,10 +111,8 @@ export default function ReaderClient({
 
   const switchChapter = useCallback(
     async (newChapterId: string) => {
-      // Cancel pending debounce save
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
 
-      // Immediately save current scroll position before switching
       const el = contentRef.current
       if (isSignedIn && el) {
         const maxScroll = el.scrollHeight - el.clientHeight
@@ -99,19 +128,43 @@ export default function ReaderClient({
     [currentChapterId, isSignedIn, saveProgress]
   )
 
+  // TASK-07: Keyboard shortcuts for chapter navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) return
+      if ((e.key === 'ArrowRight' || e.key === 'ArrowDown') && nextChapter) {
+        switchChapter(nextChapter.id)
+      } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowUp') && prevChapter) {
+        switchChapter(prevChapter.id)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [nextChapter, prevChapter, switchChapter])
+
   // ------- URL Sync + Scroll Restoration -------
 
   useEffect(() => {
-    // Keep URL in sync so page refresh and link sharing work correctly
     router.replace(`/book/${bookId}/read?chapter=${currentChapterId}`, { scroll: false })
 
     const el = contentRef.current
     if (!el) return
 
-    // Double rAF waits for layout to settle after chapter content changes
+    // TASK-05: Reset or restore progress bar
+    const progress = localProgress[currentChapterId]
+    if (progress && progress.scrollPosition > 0.01) {
+      setReadProgress(Math.round(progress.scrollPosition * 100))
+    } else {
+      setReadProgress(0)
+    }
+
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        const progress = localProgress[currentChapterId]
         if (progress && progress.scrollPosition > 0.01) {
           el.scrollTop = progress.scrollPosition * (el.scrollHeight - el.clientHeight)
         } else {
@@ -121,14 +174,12 @@ export default function ReaderClient({
     )
   }, [currentChapterId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clean up on unmount
   useEffect(() => {
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current) }
   }, [])
 
   // ------- Content Rendering -------
 
-  // Split raw text into paragraphs; single newlines within a paragraph become spaces
   const paragraphs = currentChapter.content
     .split(/\n\n+/)
     .map(p => p.replace(/\n/g, ' ').trim())
@@ -141,6 +192,21 @@ export default function ReaderClient({
   return (
     <div className="flex flex-col" style={{ height: '100dvh', background: 'var(--ink)' }}>
 
+      {/* TASK-05: Reading progress bar */}
+      <div style={{ position: 'relative', width: '100%', height: '2px', flexShrink: 0 }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            height: '2px',
+            background: 'var(--gold)',
+            width: `${readProgress}%`,
+            transition: 'width 0.2s ease',
+          }}
+        />
+      </div>
+
       {/* Toolbar */}
       <header
         className="flex-shrink-0 flex items-center justify-between px-6 py-3 gap-4"
@@ -149,11 +215,11 @@ export default function ReaderClient({
         {/* Left */}
         <div className="flex items-center gap-5">
           <Link
-            href={`/book/${bookId}`}
+            href={backHref}
             className="text-xs tracking-widest uppercase transition-colors hover:text-white"
             style={{ color: 'var(--muted)' }}
           >
-            ← Back
+            {backLabel}
           </Link>
           <button
             onClick={() => setShowTOC(v => !v)}
@@ -197,6 +263,36 @@ export default function ReaderClient({
           </button>
         </div>
       </header>
+
+      {/* TASK-06: Sign-in nudge for guest readers */}
+      {!isSignedIn && (
+        <div
+          style={{
+            padding: '6px 24px',
+            fontSize: '0.72rem',
+            background: '#16140f',
+            borderBottom: '1px solid #2a2520',
+            color: 'var(--muted)',
+          }}
+        >
+          Sign in to save your reading progress across devices.
+          <SignInButton mode="modal">
+            <button
+              style={{
+                color: 'var(--gold)',
+                marginLeft: 8,
+                textDecoration: 'underline',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 'inherit',
+              }}
+            >
+              Sign in
+            </button>
+          </SignInButton>
+        </div>
+      )}
 
       {/* TOC overlay */}
       {showTOC && (
@@ -252,6 +348,12 @@ export default function ReaderClient({
             <h2 className="text-3xl" style={{ fontFamily: 'Playfair Display, serif' }}>
               {currentChapter.title}
             </h2>
+            {/* TASK-10: Reading time estimate */}
+            {currentChapter.wordCount != null && (
+              <p style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '0.5rem' }}>
+                ~{Math.ceil(currentChapter.wordCount / 200)} min read
+              </p>
+            )}
           </div>
 
           {/* Prose body */}

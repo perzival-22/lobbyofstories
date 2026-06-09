@@ -4,7 +4,7 @@ import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import DiscoverClient from './DiscoverClient'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export default async function DiscoverPage() {
   const { userId: clerkId } = await auth()
@@ -59,9 +59,14 @@ export default async function DiscoverPage() {
           <h2 className="text-4xl mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>
             Discover
           </h2>
-          <p className="text-sm" style={{ color: 'var(--muted)' }}>
-            {books.length} {books.length === 1 ? 'story' : 'stories'} in the library
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>
+              {books.length} {books.length === 1 ? 'story' : 'stories'} in the library
+            </p>
+            <p className="text-xs" style={{ color: 'var(--muted)', letterSpacing: '0.08em' }}>
+              Sorted by recent activity
+            </p>
+          </div>
         </div>
         <DiscoverClient
           books={books}

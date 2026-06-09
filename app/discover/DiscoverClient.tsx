@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 type Book = {
   id: string
@@ -11,6 +12,7 @@ type Book = {
   coverUrl: string | null
   series: string | null
   genre: string | null
+  updatedAt: Date
   _count: { chapters: number }
 }
 
@@ -116,10 +118,12 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                 }}
               >
                 {currentlyReading.coverUrl ? (
-                  <img
+                  <Image
                     src={currentlyReading.coverUrl}
                     alt={currentlyReading.title}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    width={60}
+                    height={90}
+                    style={{ objectFit: 'cover', width: '100%', height: '100%' }}
                   />
                 ) : (
                   <div
@@ -267,10 +271,12 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                   style={{ background: '#22201c' }}
                 >
                   {book.coverUrl ? (
-                    <img
+                    <Image
                       src={book.coverUrl}
                       alt={book.title}
-                      className="w-full h-full object-cover"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      className="object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center p-8 text-center">
@@ -316,6 +322,9 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                     style={{ color: 'var(--gold-dim)' }}
                   >
                     {book._count.chapters} {book._count.chapters === 1 ? 'Chapter' : 'Chapters'}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: 'var(--gold-dim)' }}>
+                    Updated {new Date(book.updatedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                   </div>
                 </div>
               </article>

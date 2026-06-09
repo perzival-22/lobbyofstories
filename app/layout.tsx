@@ -4,7 +4,19 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Lobby of Stories',
-  description: 'A personal library of original stories',
+  description: 'A personal library of original serialized fiction.',
+  openGraph: {
+    title: 'Lobby of Stories',
+    description: 'A personal library of original serialized fiction.',
+    url: 'https://lobbyofstories.space',
+    siteName: 'Lobby of Stories',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Lobby of Stories',
+    description: 'A personal library of original serialized fiction.',
+  },
 }
 
 export default function RootLayout({
