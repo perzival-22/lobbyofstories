@@ -28,6 +28,8 @@ type Props = {
   isSignedIn: boolean
 }
 
+type Theme = 'dark' | 'sepia'
+
 export default function ReaderClient({
   bookId,
   bookTitle,
@@ -49,6 +51,7 @@ export default function ReaderClient({
   })
   const [contentError, setContentError] = useState(false)
   const [fontSize, setFontSize] = useState(18)
+  const [theme, setTheme] = useState<Theme>('dark')
   const [showTOC, setShowTOC] = useState(false)
   const [readProgress, setReadProgress] = useState(0)
   const [backHref, setBackHref] = useState(`/book/${bookId}`)
@@ -58,6 +61,10 @@ export default function ReaderClient({
 
   const contentRef = useRef<HTMLDivElement>(null)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const tocRef = useRef<HTMLDivElement>(null)
+  const contentsBtnRef = useRef<HTMLButtonElement>(null)
+  const tocWasOpen = useRef(false)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
   const currentChapter = chapters.find(c => c.id === currentChapterId) ?? chapters[0]
   const currentIndex = chapters.findIndex(c => c.id === currentChapterId)
@@ -106,6 +113,21 @@ export default function ReaderClient({
       localStorage.setItem('reader-font-size', String(fontSize))
     } catch {}
   }, [fontSize])
+
+  // Restore theme from localStorage on mount (same pattern as font size)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('reader-theme')
+      if (stored === 'sepia' || stored === 'dark') setTheme(stored)
+    } catch {}
+  }, [])
+
+  // Persist theme to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('reader-theme', theme)
+    } catch {}
+  }, [theme])
 
   // TASK-14: Detect referrer for back navigation
   useEffect(() => {
@@ -186,6 +208,80 @@ export default function ReaderClient({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [nextChapter, prevChapter, switchChapter])
 
+  // ------- Mobile swipe navigation -------
+  // Horizontal-dominant swipes flip chapters; vertical scroll is untouched
+  // (we never preventDefault and ignore gestures where dy dominates).
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0]
+    touchStartRef.current = { x: t.clientX, y: t.clientY }
+  }, [])
+
+  const onTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const start = touchStartRef.current
+      touchStartRef.current = null
+      if (!start) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      // Require a clearly horizontal swipe of meaningful length.
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+      if (dx < 0 && nextChapter) {
+        switchChapter(nextChapter.id)
+      } else if (dx > 0 && prevChapter) {
+        switchChapter(prevChapter.id)
+      }
+    },
+    [nextChapter, prevChapter, switchChapter]
+  )
+
+  // ------- TOC accessibility: Esc to close + focus trap while open -------
+  useEffect(() => {
+    if (!showTOC) return
+    const overlay = tocRef.current
+    if (!overlay) return
+
+    const getFocusable = () =>
+      Array.from(
+        overlay.querySelectorAll<HTMLElement>(
+          'button, [href], [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(el => !el.hasAttribute('disabled'))
+
+    getFocusable()[0]?.focus()
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowTOC(false)
+        return
+      }
+      if (e.key !== 'Tab') return
+      const items = getFocusable()
+      if (items.length === 0) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showTOC])
+
+  // Return focus to the Contents trigger when the TOC closes.
+  useEffect(() => {
+    if (tocWasOpen.current && !showTOC) {
+      contentsBtnRef.current?.focus()
+    }
+    tocWasOpen.current = showTOC
+  }, [showTOC])
+
   // ------- URL Sync + Scroll Restoration -------
 
   useEffect(() => {
@@ -232,10 +328,20 @@ export default function ReaderClient({
 
   const completedCount = Object.values(localProgress).filter(p => p.completed).length
 
+  const hasSceneMeta =
+    currentChapter.sceneType ||
+    currentChapter.sceneLocation ||
+    currentChapter.sceneAge ||
+    currentChapter.sceneTime
+
   // ------- Render -------
 
   return (
-    <div className="flex flex-col" style={{ height: '100dvh', background: 'var(--ink)' }}>
+    <div
+      className="reader-root flex flex-col"
+      data-theme={theme}
+      style={{ height: '100dvh', background: 'var(--reader-bg)' }}
+    >
 
       {/* TASK-05: Reading progress bar */}
       <div style={{ position: 'relative', width: '100%', height: '2px', flexShrink: 0 }}>
@@ -255,21 +361,24 @@ export default function ReaderClient({
       {/* Toolbar */}
       <header
         className="flex-shrink-0 flex items-center justify-between px-6 py-3 gap-4"
-        style={{ borderBottom: '1px solid #2a2520', background: '#0e0c0a', minHeight: '52px' }}
+        style={{ borderBottom: '1px solid var(--reader-border)', background: 'var(--reader-surface)', minHeight: '52px' }}
       >
         {/* Left */}
         <div className="flex items-center gap-5">
           <Link
             href={backHref}
-            className="text-xs tracking-widest uppercase transition-colors hover:text-white"
-            style={{ color: 'var(--muted)' }}
+            className="text-xs tracking-widest uppercase transition-colors reader-link"
+            style={{ color: 'var(--reader-muted)' }}
           >
             {backLabel}
           </Link>
           <button
+            ref={contentsBtnRef}
             onClick={() => setShowTOC(v => !v)}
-            className="text-xs tracking-widest uppercase transition-colors hover:text-white"
-            style={{ color: showTOC ? 'var(--gold)' : 'var(--muted)' }}
+            aria-expanded={showTOC}
+            aria-haspopup="dialog"
+            className="text-xs tracking-widest uppercase transition-colors reader-link"
+            style={{ color: showTOC ? 'var(--gold)' : 'var(--reader-muted)' }}
           >
             Contents
           </button>
@@ -279,30 +388,39 @@ export default function ReaderClient({
         <div className="flex-1 text-center min-w-0">
           <p
             className="text-sm truncate"
-            style={{ fontFamily: 'Playfair Display, serif', color: 'var(--paper)' }}
+            style={{ fontFamily: 'Playfair Display, serif', color: 'var(--reader-text)' }}
           >
             {bookTitle}
           </p>
-          <p className="text-xs truncate mt-0.5" style={{ color: 'var(--muted)' }}>
+          <p className="text-xs truncate mt-0.5" style={{ color: 'var(--reader-muted)' }}>
             {currentChapter.title}
           </p>
         </div>
 
-        {/* Right: font controls */}
+        {/* Right: theme + font controls */}
         <div className="flex items-center gap-3 flex-shrink-0">
+          <button
+            onClick={() => setTheme(t => (t === 'dark' ? 'sepia' : 'dark'))}
+            aria-label={theme === 'dark' ? 'Switch to sepia theme' : 'Switch to dark theme'}
+            title={theme === 'dark' ? 'Sepia theme' : 'Dark theme'}
+            className="leading-none transition-colors reader-link"
+            style={{ color: 'var(--reader-muted)', fontSize: '0.95rem' }}
+          >
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
           <button
             onClick={() => setFontSize(s => Math.max(14, s - 1))}
             aria-label="Decrease font size"
-            className="leading-none transition-colors hover:text-white"
-            style={{ color: 'var(--muted)', fontSize: '1rem' }}
+            className="leading-none transition-colors reader-link"
+            style={{ color: 'var(--reader-muted)', fontSize: '1rem' }}
           >
             A−
           </button>
           <button
             onClick={() => setFontSize(s => Math.min(26, s + 1))}
             aria-label="Increase font size"
-            className="leading-none transition-colors hover:text-white"
-            style={{ color: 'var(--muted)', fontSize: '1.15rem' }}
+            className="leading-none transition-colors reader-link"
+            style={{ color: 'var(--reader-muted)', fontSize: '1.15rem' }}
           >
             A+
           </button>
@@ -315,9 +433,9 @@ export default function ReaderClient({
           style={{
             padding: '6px 24px',
             fontSize: '0.72rem',
-            background: '#16140f',
-            borderBottom: '1px solid #2a2520',
-            color: 'var(--muted)',
+            background: 'var(--reader-surface-2)',
+            borderBottom: '1px solid var(--reader-border)',
+            color: 'var(--reader-muted)',
           }}
         >
           Sign in to save your reading progress across devices.
@@ -342,11 +460,15 @@ export default function ReaderClient({
       {/* TOC overlay */}
       {showTOC && (
         <div
+          ref={tocRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Table of contents"
           className="absolute z-50 left-0 right-0 overflow-y-auto"
-          style={{ top: '52px', maxHeight: '55vh', background: '#0e0c0a', borderBottom: '1px solid #2a2520' }}
+          style={{ top: '52px', maxHeight: '55vh', background: 'var(--reader-surface)', borderBottom: '1px solid var(--reader-border)' }}
         >
           <div className="px-6 py-3">
-            <p className="text-xs tracking-widest uppercase mb-3" style={{ color: 'var(--muted)' }}>
+            <p className="text-xs tracking-widest uppercase mb-3" style={{ color: 'var(--reader-muted)' }}>
               {completedCount} / {chapters.length} chapters read
             </p>
             {chapters.map(ch => {
@@ -356,10 +478,10 @@ export default function ReaderClient({
                 <button
                   key={ch.id}
                   onClick={() => switchChapter(ch.id)}
-                  className="flex items-center gap-4 w-full text-left py-3 text-sm transition-colors hover:text-white"
+                  className="flex items-center gap-4 w-full text-left py-3 text-sm transition-colors reader-link"
                   style={{
-                    color: active ? 'var(--gold)' : done ? 'var(--paper)' : 'var(--muted)',
-                    borderBottom: '1px solid #1a1714',
+                    color: active ? 'var(--gold)' : done ? 'var(--reader-text)' : 'var(--reader-muted)',
+                    borderBottom: '1px solid var(--reader-border-dim)',
                   }}
                 >
                   <span
@@ -381,6 +503,8 @@ export default function ReaderClient({
       <div
         ref={contentRef}
         onScroll={handleScroll}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
         className="flex-1 overflow-y-auto"
         style={{ overscrollBehavior: 'contain' }}
       >
@@ -395,9 +519,26 @@ export default function ReaderClient({
             </h2>
             {/* TASK-10: Reading time estimate */}
             {currentChapter.wordCount != null && (
-              <p style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '0.5rem' }}>
+              <p style={{ fontSize: '0.72rem', color: 'var(--reader-muted)', marginTop: '0.5rem' }}>
                 ~{Math.ceil(currentChapter.wordCount / 200)} min read
               </p>
+            )}
+            {/* Scene metadata (rendered only where present) */}
+            {hasSceneMeta && (
+              <div className="reader-scene-meta">
+                {currentChapter.sceneType && (
+                  <span className="reader-scene-badge">{currentChapter.sceneType}</span>
+                )}
+                {currentChapter.sceneLocation && (
+                  <span className="reader-scene-item">{currentChapter.sceneLocation}</span>
+                )}
+                {currentChapter.sceneAge && (
+                  <span className="reader-scene-item">Age {currentChapter.sceneAge}</span>
+                )}
+                {currentChapter.sceneTime && (
+                  <span className="reader-scene-item">{currentChapter.sceneTime}</span>
+                )}
+              </div>
             )}
           </div>
 
@@ -406,11 +547,11 @@ export default function ReaderClient({
             {isCurrentLoaded ? (
               paragraphs.map((para, i) => <p key={i}>{para}</p>)
             ) : contentError ? (
-              <p style={{ color: 'var(--muted)', fontStyle: 'italic' }}>
+              <p style={{ color: 'var(--reader-muted)', fontStyle: 'italic' }}>
                 This chapter could not be loaded. Switch away and back to retry.
               </p>
             ) : (
-              <p className="reader-loading" style={{ color: 'var(--muted)', fontStyle: 'italic' }}>
+              <p className="reader-loading" style={{ color: 'var(--reader-muted)', fontStyle: 'italic' }}>
                 Loading chapter…
               </p>
             )}
@@ -419,13 +560,13 @@ export default function ReaderClient({
           {/* Prev / Next navigation */}
           <div
             className="max-w-[68ch] mx-auto mt-20 pb-16 flex items-start justify-between"
-            style={{ borderTop: '1px solid #2a2520', paddingTop: '2rem' }}
+            style={{ borderTop: '1px solid var(--reader-border)', paddingTop: '2rem' }}
           >
             {prevChapter ? (
               <button
                 onClick={() => switchChapter(prevChapter.id)}
-                className="text-sm text-left transition-colors hover:text-white"
-                style={{ color: 'var(--muted)', maxWidth: '45%' }}
+                className="text-sm text-left transition-colors reader-link"
+                style={{ color: 'var(--reader-muted)', maxWidth: '45%' }}
               >
                 <span className="block text-xs tracking-widest uppercase mb-1" style={{ color: 'var(--gold-dim)' }}>
                   ← Previous
@@ -437,8 +578,8 @@ export default function ReaderClient({
             {nextChapter ? (
               <button
                 onClick={() => switchChapter(nextChapter.id)}
-                className="text-sm text-right transition-colors hover:text-white"
-                style={{ color: 'var(--muted)', maxWidth: '45%' }}
+                className="text-sm text-right transition-colors reader-link"
+                style={{ color: 'var(--reader-muted)', maxWidth: '45%' }}
               >
                 <span className="block text-xs tracking-widest uppercase mb-1" style={{ color: 'var(--gold-dim)' }}>
                   Next →
@@ -448,8 +589,8 @@ export default function ReaderClient({
             ) : (
               <Link
                 href={`/book/${bookId}`}
-                className="text-sm text-right transition-colors hover:text-white"
-                style={{ color: 'var(--muted)', maxWidth: '45%' }}
+                className="text-sm text-right transition-colors reader-link"
+                style={{ color: 'var(--reader-muted)', maxWidth: '45%' }}
               >
                 <span className="block text-xs tracking-widest uppercase mb-1" style={{ color: 'var(--gold-dim)' }}>
                   Finished →
