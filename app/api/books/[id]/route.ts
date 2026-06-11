@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
-import { parseChapters } from '@/lib/parseChapters'
+import { replaceBookChapters } from '@/lib/ingestChapters'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -39,10 +39,16 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
   try {
     const body = await req.json()
-    const { title, author, description, series, genre, coverUrl, rawText, status } = body
+    const { title, author, description, series, genre, coverUrl, rawText, status, confirmReset } = body
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+    }
+
+    // Ensure the book exists before doing any chapter work.
+    const existing = await prisma.book.findUnique({ where: { id }, select: { id: true } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Book not found' }, { status: 404 })
     }
 
     // Base metadata update
@@ -60,21 +66,30 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       updateData.coverUrl = coverUrl || null
     }
 
-    // If new story text is provided: delete old chapters + recreate
-    // Note: this cascade-deletes ReadingProgress for those chapters
+    // If new story text is provided: replace chapters non-destructively.
+    // Standardized on parseBook.ts (via replaceBookChapters) so reader progress
+    // is preserved by upserting on [bookId, order] instead of wiping everything.
     if (rawText && rawText.trim()) {
-      const parsed = parseChapters(rawText)
-      await prisma.chapter.deleteMany({ where: { bookId: id } })
-      updateData.chapters = {
-        create: parsed.map((ch, i) => ({
-          order: i + 1,
-          episodeNumber: 1,
-          episodeTitle: ch.title,
-          sceneNumber: i + 1,
-          sceneHeading: ch.title.toUpperCase(),
-          title: ch.title,
-          content: ch.content,
-        })),
+      const result = await replaceBookChapters(id, rawText, { confirmReset })
+
+      if (result.status === 'empty') {
+        return NextResponse.json(
+          { error: 'No episodes found. Check that the text starts with # Episode headings.' },
+          { status: 422 }
+        )
+      }
+
+      if (result.status === 'needs-confirm') {
+        return NextResponse.json(
+          {
+            error:
+              'Updating the story text would delete chapters and their reader ' +
+              'progress. Resend with confirmReset: true to proceed.',
+            chaptersToDelete: result.chaptersToDelete,
+            progressRowsToDelete: result.progressRowsToDelete,
+          },
+          { status: 409 }
+        )
       }
     }
 

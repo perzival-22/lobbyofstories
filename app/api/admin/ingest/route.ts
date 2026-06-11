@@ -5,17 +5,21 @@
  *
  * Body (JSON):
  *   {
- *     bookId: string,   // existing Book record id
- *     text:   string,   // full pasted book text (formatted output)
- *     mode:   "replace" | "append"   // default: "replace"
+ *     bookId:       string,   // existing Book record id
+ *     text:         string,   // full pasted book text (formatted output)
+ *     mode:         "replace" | "append"   // default: "replace"
+ *     confirmReset: boolean   // required to delete now-orphaned chapters
  *   }
  *
  * Auth: Clerk — admin only (same guard as other admin routes).
  *
  * What it does:
  *   1. Parses the pasted text into episodes → scenes via parseBookText()
- *   2. In "replace" mode: deletes all existing chapters for the book first
- *   3. Upserts every scene as a Chapter row with metadata fields populated
+ *   2. In "replace" mode: upserts each scene by [bookId, order] (preserving
+ *      reader progress) and deletes only chapters whose order no longer exists.
+ *      That deletion is destructive, so it requires confirmReset: true — without
+ *      it the route returns 409 with the chapter/progress counts at risk.
+ *   3. In "append" mode: upserts scenes after the current last chapter.
  *   4. Returns a summary
  */
 
@@ -23,6 +27,7 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { parseBookText, flattenScenes } from '@/lib/parseBook';
+import { replaceBookChapters } from '@/lib/ingestChapters';
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
@@ -43,14 +48,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: { bookId: string; text: string; mode?: 'replace' | 'append' };
+  let body: {
+    bookId: string;
+    text: string;
+    mode?: 'replace' | 'append';
+    confirmReset?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { bookId, text, mode = 'replace' } = body;
+  const { bookId, text, mode = 'replace', confirmReset } = body;
 
   if (!bookId || !text) {
     return NextResponse.json(
@@ -65,7 +75,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Book not found' }, { status: 404 });
   }
 
-  // Parse
+  // ── Replace mode: non-destructive upsert-by-order via shared helper ────────
+  if (mode === 'replace') {
+    const result = await replaceBookChapters(bookId, text, { confirmReset });
+
+    if (result.status === 'empty') {
+      return NextResponse.json(
+        { error: 'No episodes found. Check that the text starts with # Episode headings.' },
+        { status: 422 }
+      );
+    }
+
+    if (result.status === 'needs-confirm') {
+      return NextResponse.json(
+        {
+          error:
+            'This replace would delete chapters and their reader progress. ' +
+            'Resend with confirmReset: true to proceed.',
+          chaptersToDelete: result.chaptersToDelete,
+          progressRowsToDelete: result.progressRowsToDelete,
+        },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      summary: {
+        bookId,
+        mode,
+        episodesFound: result.episodesFound,
+        scenesIngested: result.scenesIngested,
+        chaptersDeleted: result.chaptersDeleted,
+        episodes: result.episodes,
+      },
+    });
+  }
+
+  // ── Append mode: add scenes after the existing last chapter ────────────────
   const episodes = parseBookText(text);
   if (episodes.length === 0) {
     return NextResponse.json(
@@ -75,24 +122,13 @@ export async function POST(req: NextRequest) {
   }
 
   const scenes = flattenScenes(episodes);
-  const totalScenes = scenes.length;
 
-  // In replace mode, wipe existing chapters first
-  if (mode === 'replace') {
-    await prisma.chapter.deleteMany({ where: { bookId } });
-  }
+  const lastChapter = await prisma.chapter.findFirst({
+    where: { bookId },
+    orderBy: { order: 'desc' },
+  });
+  const orderOffset = lastChapter?.order ?? 0;
 
-  // Determine starting global order for append mode
-  let orderOffset = 0;
-  if (mode === 'append') {
-    const lastChapter = await prisma.chapter.findFirst({
-      where: { bookId },
-      orderBy: { order: 'desc' },
-    });
-    orderOffset = lastChapter?.order ?? 0;
-  }
-
-  // Upsert all scenes
   const created = await prisma.$transaction(
     scenes.map((scene) =>
       prisma.chapter.upsert({
