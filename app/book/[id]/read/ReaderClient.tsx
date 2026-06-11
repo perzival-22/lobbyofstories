@@ -6,12 +6,16 @@ import Link from 'next/link'
 import { SignInButton } from '@clerk/nextjs'
 import type { ProgressEntry } from './page'
 
+// Chapter metadata only — the body (`content`) is lazy-loaded on demand.
 type Chapter = {
   id: string
   title: string
   order: number
-  content: string
   wordCount?: number
+  sceneType?: string | null
+  sceneLocation?: string | null
+  sceneAge?: string | null
+  sceneTime?: string | null
 }
 
 type Props = {
@@ -19,6 +23,7 @@ type Props = {
   bookTitle: string
   chapters: Chapter[]
   initialChapterId: string
+  initialChapterContent: string
   progressMap: Record<string, ProgressEntry>
   isSignedIn: boolean
 }
@@ -28,12 +33,21 @@ export default function ReaderClient({
   bookTitle,
   chapters,
   initialChapterId,
+  initialChapterContent,
   progressMap,
   isSignedIn,
 }: Props) {
   const router = useRouter()
 
   const [currentChapterId, setCurrentChapterId] = useState(initialChapterId)
+
+  // Cache of chapter bodies keyed by chapter id. Seeded with the initial
+  // chapter (sent by the server); other chapters are fetched on first visit
+  // and kept here so re-visits don't refetch.
+  const [contentCache, setContentCache] = useState<Record<string, string>>({
+    [initialChapterId]: initialChapterContent,
+  })
+  const [contentError, setContentError] = useState(false)
   const [fontSize, setFontSize] = useState(18)
   const [showTOC, setShowTOC] = useState(false)
   const [readProgress, setReadProgress] = useState(0)
@@ -49,6 +63,31 @@ export default function ReaderClient({
   const currentIndex = chapters.findIndex(c => c.id === currentChapterId)
   const prevChapter = currentIndex > 0 ? chapters[currentIndex - 1] : null
   const nextChapter = currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null
+
+  const currentContent = contentCache[currentChapterId]
+  const isCurrentLoaded = currentContent !== undefined
+
+  // Lazy-fetch the current chapter's body when it isn't cached yet.
+  useEffect(() => {
+    if (contentCache[currentChapterId] !== undefined) return
+
+    let cancelled = false
+    setContentError(false)
+
+    fetch(`/api/books/${bookId}/chapters/${currentChapterId}`)
+      .then(res => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data: { content?: string }) => {
+        if (cancelled) return
+        setContentCache(prev => ({ ...prev, [currentChapterId]: data.content ?? '' }))
+      })
+      .catch(err => {
+        if (cancelled) return
+        console.error('Chapter content fetch failed:', err)
+        setContentError(true)
+      })
+
+    return () => { cancelled = true }
+  }, [currentChapterId, bookId, contentCache])
 
   // TASK-02: Restore font size from localStorage on mount
   useEffect(() => {
@@ -152,9 +191,6 @@ export default function ReaderClient({
   useEffect(() => {
     router.replace(`/book/${bookId}/read?chapter=${currentChapterId}`, { scroll: false })
 
-    const el = contentRef.current
-    if (!el) return
-
     // TASK-05: Reset or restore progress bar
     const progress = localProgress[currentChapterId]
     if (progress && progress.scrollPosition > 0.01) {
@@ -162,7 +198,16 @@ export default function ReaderClient({
     } else {
       setReadProgress(0)
     }
+  }, [currentChapterId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Scroll restoration must wait until the chapter body is actually rendered,
+  // otherwise scrollHeight is wrong and the restore is a no-op.
+  useEffect(() => {
+    if (!isCurrentLoaded) return
+    const el = contentRef.current
+    if (!el) return
+
+    const progress = localProgress[currentChapterId]
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         if (progress && progress.scrollPosition > 0.01) {
@@ -172,7 +217,7 @@ export default function ReaderClient({
         }
       })
     )
-  }, [currentChapterId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentChapterId, isCurrentLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current) }
@@ -180,7 +225,7 @@ export default function ReaderClient({
 
   // ------- Content Rendering -------
 
-  const paragraphs = currentChapter.content
+  const paragraphs = (currentContent ?? '')
     .split(/\n\n+/)
     .map(p => p.replace(/\n/g, ' ').trim())
     .filter(Boolean)
@@ -358,9 +403,17 @@ export default function ReaderClient({
 
           {/* Prose body */}
           <div className="prose-reader" style={{ fontSize: `${fontSize}px` }}>
-            {paragraphs.map((para, i) => (
-              <p key={i}>{para}</p>
-            ))}
+            {isCurrentLoaded ? (
+              paragraphs.map((para, i) => <p key={i}>{para}</p>)
+            ) : contentError ? (
+              <p style={{ color: 'var(--muted)', fontStyle: 'italic' }}>
+                This chapter could not be loaded. Switch away and back to retry.
+              </p>
+            ) : (
+              <p className="reader-loading" style={{ color: 'var(--muted)', fontStyle: 'italic' }}>
+                Loading chapter…
+              </p>
+            )}
           </div>
 
           {/* Prev / Next navigation */}

@@ -74,3 +74,14 @@ a {
 .prose-reader p:first-of-type {
   text-indent: 0;
 }
+
+/* Subtle pulse while a chapter body is lazy-loading */
+@keyframes reader-loading-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.85; }
+}
+
+.reader-loading {
+  animation: reader-loading-pulse 1.4s ease-in-out infinite;
+  text-indent: 0;
+}
