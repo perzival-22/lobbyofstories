@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { isAdmin } from '@/lib/auth'
 
 const isAdminRoute = createRouteMatcher(['/admin(.*)'])
 
@@ -20,7 +21,7 @@ export default clerkMiddleware(async (auth, req) => {
     if (!userId) {
       return NextResponse.redirect(new URL('/sign-in', req.url))
     }
-    if (userId !== process.env.ADMIN_USER_ID) {
+    if (!isAdmin(userId)) {
       return NextResponse.redirect(new URL('/', req.url))
     }
   }
