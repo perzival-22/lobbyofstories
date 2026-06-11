@@ -56,12 +56,70 @@ a {
   animation: lobby-swipe-bounce 1.8s ease-in-out infinite;
 }
 
+/* ── Reader theming (dark default + sepia/light) ────────────────────────── */
+.reader-root {
+  --reader-bg: var(--ink);
+  --reader-surface: #0e0c0a;
+  --reader-surface-2: #16140f;
+  --reader-border: #2a2520;
+  --reader-border-dim: #1a1714;
+  --reader-text: var(--paper);
+  --reader-muted: var(--muted);
+  color: var(--reader-text);
+}
+
+.reader-root[data-theme='sepia'] {
+  --reader-bg: #f3ead6;
+  --reader-surface: #ece1c8;
+  --reader-surface-2: #e6dabd;
+  --reader-border: #d8c9a6;
+  --reader-border-dim: #e2d6ba;
+  --reader-text: #3b3326;
+  --reader-muted: #8a7a57;
+  /* Darken the gold accents so they stay legible on the cream background */
+  --gold: #927528;
+  --gold-dim: #ad8d3c;
+}
+
+/* Theme-aware hover for reader controls (replaces hover:text-white) */
+.reader-link {
+  transition: color 0.2s ease;
+}
+.reader-link:hover {
+  color: var(--reader-text);
+}
+
+/* Scene metadata row in the chapter heading */
+.reader-scene-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  margin-top: 0.85rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--reader-muted);
+}
+.reader-scene-badge {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.62rem;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid var(--gold-dim);
+  border-radius: 2px;
+  color: var(--gold);
+}
+.reader-scene-item {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* Reader prose */
 .prose-reader {
   font-family: 'Lora', Georgia, serif;
   font-size: 1.125rem;
   line-height: 1.9;
-  color: var(--paper);
+  color: var(--reader-text, var(--paper));
   max-width: 68ch;
   margin: 0 auto;
 }
