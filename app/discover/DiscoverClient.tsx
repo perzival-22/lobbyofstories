@@ -135,7 +135,7 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                       justifyContent: 'center',
                       padding: 8,
                       textAlign: 'center',
-                      fontFamily: 'Playfair Display, serif',
+                      fontFamily: 'var(--font-playfair), serif',
                       fontSize: '0.6rem',
                       color: 'var(--gold-dim)',
                     }}
@@ -149,7 +149,7 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <h3
                   style={{
-                    fontFamily: 'Playfair Display, serif',
+                    fontFamily: 'var(--font-playfair), serif',
                     fontSize: '1.15rem',
                     color: 'var(--paper)',
                     marginBottom: '0.25rem',
@@ -205,7 +205,7 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
             width: '100%',
             maxWidth: '480px',
             outline: 'none',
-            fontFamily: 'Lora, serif',
+            fontFamily: 'var(--font-lora), serif',
             fontSize: '0.95rem',
             borderRadius: '2px',
           }}
@@ -283,7 +283,7 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                       <span
                         className="text-3xl leading-tight"
                         style={{
-                          fontFamily: 'Playfair Display, serif',
+                          fontFamily: 'var(--font-playfair), serif',
                           color: 'var(--gold-dim)',
                         }}
                       >
@@ -305,7 +305,7 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                 <div className="p-5">
                   <h3
                     className="text-xl mb-1"
-                    style={{ fontFamily: 'Playfair Display, serif' }}
+                    style={{ fontFamily: 'var(--font-playfair), serif' }}
                   >
                     {book.title}
                   </h3>

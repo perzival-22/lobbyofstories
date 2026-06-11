@@ -129,7 +129,7 @@ export default function LandingPage() {
             </p>
             <h1
               style={{
-                fontFamily: 'Playfair Display, serif',
+                fontFamily: 'var(--font-playfair), serif',
                 fontSize: 'clamp(2rem, 5.5vw, 4rem)',
                 lineHeight: 1.2,
                 color: 'var(--paper)',
@@ -142,7 +142,7 @@ export default function LandingPage() {
             </h1>
             <p
               style={{
-                fontFamily: 'Lora, serif',
+                fontFamily: 'var(--font-lora), serif',
                 fontSize: '1rem',
                 color: 'var(--muted)',
                 lineHeight: 1.9,
@@ -164,7 +164,7 @@ export default function LandingPage() {
                 background: 'transparent',
                 border: '1px solid var(--gold)',
                 color: 'var(--gold)',
-                fontFamily: 'Lora, serif',
+                fontFamily: 'var(--font-lora), serif',
                 fontSize: '0.7rem',
                 letterSpacing: '0.2em',
                 textTransform: 'uppercase',

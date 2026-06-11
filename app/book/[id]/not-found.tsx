@@ -8,7 +8,7 @@ export default function BookNotFound() {
     >
       <h1
         className="text-4xl mb-4"
-        style={{ fontFamily: 'Playfair Display, serif', color: 'var(--paper)' }}
+        style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--paper)' }}
       >
         Story not found
       </h1>

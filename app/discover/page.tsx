@@ -56,7 +56,7 @@ export default async function DiscoverPage() {
       <SiteHeader activePage="discover" />
       <div className="px-8 py-12 max-w-6xl mx-auto">
         <div className="mb-10">
-          <h2 className="text-4xl mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+          <h2 className="text-4xl mb-2" style={{ fontFamily: 'var(--font-playfair), serif' }}>
             Discover
           </h2>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>

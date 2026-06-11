@@ -21,13 +21,13 @@
 body {
   background-color: var(--ink);
   color: var(--paper);
-  font-family: 'Lora', Georgia, serif;
+  font-family: var(--font-lora), Georgia, serif;
   line-height: 1.7;
   min-height: 100vh;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-playfair), Georgia, serif;
   line-height: 1.2;
 }
 
@@ -116,7 +116,7 @@ a {
 
 /* Reader prose */
 .prose-reader {
-  font-family: 'Lora', Georgia, serif;
+  font-family: var(--font-lora), Georgia, serif;
   font-size: 1.125rem;
   line-height: 1.9;
   color: var(--reader-text, var(--paper));

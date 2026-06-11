@@ -18,7 +18,7 @@ export default async function AdminBooksPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-3xl" style={{ fontFamily: 'Playfair Display, serif' }}>
+        <h1 className="text-3xl" style={{ fontFamily: 'var(--font-playfair), serif' }}>
           All Books
         </h1>
         <Link

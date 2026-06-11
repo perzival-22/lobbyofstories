@@ -18,7 +18,7 @@ export default async function SiteHeader({ activePage }: Props) {
         <div>
           <h1
             className="text-2xl tracking-wide"
-            style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+            style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
           >
             Lobby of Stories
           </h1>

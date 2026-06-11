@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 const inputStyle = {
   background: '#1a1714',
@@ -11,7 +12,7 @@ const inputStyle = {
   padding: '10px 14px',
   width: '100%',
   outline: 'none',
-  fontFamily: 'Lora, serif',
+  fontFamily: 'var(--font-lora), serif',
   fontSize: '0.95rem',
   borderRadius: '2px',
 } as const
@@ -106,7 +107,7 @@ export default function NewBookPage() {
         >
           ← Dashboard
         </Link>
-        <h1 className="text-3xl" style={{ fontFamily: 'Playfair Display, serif' }}>
+        <h1 className="text-3xl" style={{ fontFamily: 'var(--font-playfair), serif' }}>
           Add New Book
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
@@ -133,9 +134,12 @@ export default function NewBookPage() {
           <label style={labelStyle}>Cover Image</label>
           <div className="flex gap-6 items-start">
             {coverPreview && (
-              <img
+              <Image
                 src={coverPreview}
                 alt="Cover preview"
+                width={96}
+                height={144}
+                unoptimized
                 className="w-24 h-36 object-cover flex-shrink-0"
                 style={{ border: '1px solid #3a3530' }}
               />

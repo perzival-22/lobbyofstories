@@ -9,6 +9,8 @@ import SiteFooter from '@/components/SiteFooter'
 
 export const revalidate = 60
 
+const SITE_URL = 'https://lobbyofstories.space'
+
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -18,12 +20,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     select: { title: true, description: true, coverUrl: true },
   })
   if (!book) return { title: 'Story not found' }
+
+  const description = book.description ?? `Read ${book.title} on Lobby of Stories.`
+  const canonical = `${SITE_URL}/book/${id}`
+
   return {
+    metadataBase: new URL(SITE_URL),
     title: `${book.title} — Lobby of Stories`,
-    description: book.description ?? `Read ${book.title} on Lobby of Stories.`,
+    description,
+    alternates: { canonical },
     openGraph: {
       title: book.title,
-      description: book.description ?? `Read ${book.title} on Lobby of Stories.`,
+      description,
+      url: canonical,
+      type: 'article',
       images: book.coverUrl ? [{ url: book.coverUrl }] : [],
     },
   }
@@ -95,7 +105,7 @@ export default async function BookDetailPage({ params }: Props) {
                 <Image src={book.coverUrl} alt={book.title} fill priority className="object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-6 text-center">
-                  <span className="text-2xl leading-snug" style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold-dim)' }}>
+                  <span className="text-2xl leading-snug" style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold-dim)' }}>
                     {book.title}
                   </span>
                 </div>
@@ -110,7 +120,7 @@ export default async function BookDetailPage({ params }: Props) {
                 {book.series}
               </p>
             )}
-            <h1 className="text-5xl mb-3 leading-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
+            <h1 className="text-5xl mb-3 leading-tight" style={{ fontFamily: 'var(--font-playfair), serif' }}>
               {book.title}
             </h1>
             <p className="mb-5 text-sm" style={{ color: 'var(--muted)' }}>by {book.author}</p>
