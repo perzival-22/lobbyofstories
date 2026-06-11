@@ -18,9 +18,6 @@ export default function SiteFooter() {
         <a href="mailto:kelvinmusiomi99@gmail.com" className="hover:text-white transition-colors">
           Contact
         </a>
-        <Link href="/about" className="hover:text-white transition-colors">
-          About
-        </Link>
       </nav>
     </footer>
   )
