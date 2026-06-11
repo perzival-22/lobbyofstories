@@ -11,7 +11,7 @@ const inputStyle = {
   padding: '10px 14px',
   width: '100%',
   outline: 'none',
-  fontFamily: 'Lora, serif',
+  fontFamily: 'var(--font-lora), serif',
   fontSize: '0.95rem',
   borderRadius: '2px',
 } as const
@@ -72,7 +72,7 @@ export default function NewBookPage() {
         >
           ← Dashboard
         </Link>
-        <h1 className="text-3xl" style={{ fontFamily: 'Playfair Display, serif' }}>
+        <h1 className="text-3xl" style={{ fontFamily: 'var(--font-playfair), serif' }}>
           New Book
         </h1>
       </div>

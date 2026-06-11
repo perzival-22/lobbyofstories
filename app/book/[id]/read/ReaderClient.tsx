@@ -388,7 +388,7 @@ export default function ReaderClient({
         <div className="flex-1 text-center min-w-0">
           <p
             className="text-sm truncate"
-            style={{ fontFamily: 'Playfair Display, serif', color: 'var(--reader-text)' }}
+            style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--reader-text)' }}
           >
             {bookTitle}
           </p>
@@ -514,7 +514,7 @@ export default function ReaderClient({
             <p className="text-xs tracking-widest uppercase mb-4" style={{ color: 'var(--gold-dim)' }}>
               Chapter {String(currentChapter.order).padStart(2, '0')}
             </p>
-            <h2 className="text-3xl" style={{ fontFamily: 'Playfair Display, serif' }}>
+            <h2 className="text-3xl" style={{ fontFamily: 'var(--font-playfair), serif' }}>
               {currentChapter.title}
             </h2>
             {/* TASK-10: Reading time estimate */}

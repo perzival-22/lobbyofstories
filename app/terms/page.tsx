@@ -21,7 +21,7 @@ export default function TermsPage() {
           </p>
           <h1
             className="text-4xl mb-4"
-            style={{ fontFamily: 'Playfair Display, serif' }}
+            style={{ fontFamily: 'var(--font-playfair), serif' }}
           >
             Terms &amp; Conditions
           </h1>
@@ -38,7 +38,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               1. Agreement to These Terms
             </h2>
@@ -62,7 +62,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               2. Intellectual Property &amp; Copyright
             </h2>
@@ -79,7 +79,7 @@ export default function TermsPage() {
 
             <h3
               className="text-base mt-5 mb-2"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--paper)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--paper)' }}
             >
               You may NOT:
             </h3>
@@ -113,7 +113,7 @@ export default function TermsPage() {
 
             <h3
               className="text-base mt-5 mb-2"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--paper)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--paper)' }}
             >
               You may:
             </h3>
@@ -145,7 +145,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               3. Limited Reading Licence
             </h2>
@@ -164,7 +164,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               4. User Accounts
             </h2>
@@ -201,7 +201,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               5. Data Collection &amp; Privacy
             </h2>
@@ -235,7 +235,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               6. Acceptable Use
             </h2>
@@ -271,7 +271,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               7. No User-Generated Content
             </h2>
@@ -287,7 +287,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               8. Availability &amp; Modifications
             </h2>
@@ -314,7 +314,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               9. Disclaimer of Warranties
             </h2>
@@ -331,7 +331,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               10. Limitation of Liability
             </h2>
@@ -353,7 +353,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               11. Third-Party Services
             </h2>
@@ -389,7 +389,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               12. Enforcement &amp; Violations
             </h2>
@@ -413,7 +413,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               13. Severability
             </h2>
@@ -428,7 +428,7 @@ export default function TermsPage() {
           <section>
             <h2
               className="text-lg mb-3 tracking-wide"
-              style={{ fontFamily: 'Playfair Display, serif', color: 'var(--gold)' }}
+              style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold)' }}
             >
               14. Contact
             </h2>
