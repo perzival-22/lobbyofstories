@@ -21,15 +21,17 @@
 
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db';
 import { parseBookText, flattenScenes } from '@/lib/parseBook';
-
-const ADMIN_CLERK_USER_ID = process.env.ADMIN_CLERK_USER_ID!;
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
 function isAdmin(userId: string | null): boolean {
-  return userId === ADMIN_CLERK_USER_ID;
+  const adminUserId = process.env.ADMIN_USER_ID;
+  // If the admin id is not configured, fail closed (treat nobody as admin)
+  // rather than crashing the route.
+  if (!adminUserId) return false;
+  return userId === adminUserId;
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
