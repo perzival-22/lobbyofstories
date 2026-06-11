@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
 import { replaceBookChapters } from '@/lib/ingestChapters'
+import { isAdmin } from '@/lib/auth'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -33,7 +34,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   const { id } = await params
   const { userId } = await auth()
 
-  if (!userId || userId !== process.env.ADMIN_USER_ID) {
+  if (!isAdmin(userId)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -111,7 +112,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   const { id } = await params
   const { userId } = await auth()
 
-  if (!userId || userId !== process.env.ADMIN_USER_ID) {
+  if (!isAdmin(userId)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

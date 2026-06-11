@@ -28,16 +28,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { parseBookText, flattenScenes } from '@/lib/parseBook';
 import { replaceBookChapters } from '@/lib/ingestChapters';
-
-// ─── Auth guard ───────────────────────────────────────────────────────────────
-
-function isAdmin(userId: string | null): boolean {
-  const adminUserId = process.env.ADMIN_USER_ID;
-  // If the admin id is not configured, fail closed (treat nobody as admin)
-  // rather than crashing the route.
-  if (!adminUserId) return false;
-  return userId === adminUserId;
-}
+import { isAdmin } from '@/lib/auth';
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 

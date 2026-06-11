@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
+import { rateLimit, rateLimitHeaders } from '@/lib/rateLimit'
 
 // GET /api/progress?bookId=xxx
 // Returns all chapter progress for the current user within a book
@@ -52,6 +53,16 @@ export async function POST(req: NextRequest) {
 
   if (!clerkId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Rate limit progress writes per user: 60 / minute (scroll saves are debounced
+  // client-side, so this is generous headroom for normal reading).
+  const limit = rateLimit(`progress:${clerkId}`, 60, 60_000)
+  if (!limit.success) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please slow down.' },
+      { status: 429, headers: rateLimitHeaders(limit) }
+    )
   }
 
   try {
