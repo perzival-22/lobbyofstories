@@ -5,11 +5,11 @@
  * ingest route (POST /api/admin/ingest, mode "replace") and the book update
  * route (PUT /api/books/[id], rawText branch).
  *
- * Both paths parse the formatted book text with `parseBook.ts` and then
- * UPSERT every scene by its [bookId, order] key. Upserting (rather than
- * deleteMany + create) preserves each Chapter's id for orders that already
- * exist, which in turn preserves every reader's ReadingProgress (the FK points
- * at chapterId).
+ * Both paths parse the formatted book text with `parseBook.ts` (Book title +
+ * Chapters format) and then UPSERT every chapter by its [bookId, order] key.
+ * Upserting (rather than deleteMany + create) preserves each Chapter's id for
+ * orders that already exist, which in turn preserves every reader's
+ * ReadingProgress (the FK points at chapterId).
  *
  * Chapters whose `order` no longer exists in the new parse ("orphans") are the
  * only rows that get deleted — and only when the caller passes
@@ -19,20 +19,20 @@
  */
 
 import { prisma } from './db';
-import { parseBookText, flattenScenes } from './parseBook';
+import { parseBookText } from './parseBook';
 
 export type IngestResult =
-  // No episodes parsed from the text.
+  // No chapters parsed from the text.
   | { status: 'empty' }
   // Destructive: orphan chapters would be deleted; caller must confirm.
   | { status: 'needs-confirm'; chaptersToDelete: number; progressRowsToDelete: number }
   // Applied successfully.
   | {
       status: 'ok';
-      episodesFound: number;
-      scenesIngested: number;
+      title: string | null; // book title parsed from the `# …` line, if any
+      chaptersIngested: number;
       chaptersDeleted: number;
-      episodes: { number: number; title: string; scenes: number }[];
+      chapters: { order: number; title: string }[];
     };
 
 export async function replaceBookChapters(
@@ -40,13 +40,12 @@ export async function replaceBookChapters(
   rawText: string,
   opts: { confirmReset?: boolean } = {}
 ): Promise<IngestResult> {
-  const episodes = parseBookText(rawText);
-  if (episodes.length === 0) {
+  const { title, chapters } = parseBookText(rawText);
+  if (chapters.length === 0) {
     return { status: 'empty' };
   }
 
-  const scenes = flattenScenes(episodes);
-  const newOrders = new Set(scenes.map((s) => s.globalOrder));
+  const newOrders = new Set(chapters.map((c) => c.order));
 
   // Existing chapters whose order is not present in the new parse get orphaned.
   const existing = await prisma.chapter.findMany({
@@ -69,37 +68,21 @@ export async function replaceBookChapters(
     };
   }
 
-  // Upsert every scene by [bookId, order]. Existing orders are updated in place
-  // (id preserved → ReadingProgress preserved); new orders are created.
+  // Upsert every chapter by [bookId, order]. Existing orders are updated in
+  // place (id preserved → ReadingProgress preserved); new orders are created.
   await prisma.$transaction(
-    scenes.map((scene) =>
+    chapters.map((chapter) =>
       prisma.chapter.upsert({
-        where: { bookId_order: { bookId, order: scene.globalOrder } },
+        where: { bookId_order: { bookId, order: chapter.order } },
         update: {
-          episodeNumber: scene.episodeNumber,
-          episodeTitle: scene.episodeTitle,
-          sceneNumber: scene.sceneNumber,
-          sceneHeading: scene.sceneHeading,
-          title: scene.sceneTitle,
-          sceneType: scene.metadata.type ?? null,
-          sceneLocation: scene.metadata.location ?? null,
-          sceneAge: scene.metadata.age ?? null,
-          sceneTime: scene.metadata.time ?? null,
-          content: scene.body,
+          title: chapter.title,
+          content: chapter.body,
         },
         create: {
           bookId,
-          order: scene.globalOrder,
-          episodeNumber: scene.episodeNumber,
-          episodeTitle: scene.episodeTitle,
-          sceneNumber: scene.sceneNumber,
-          sceneHeading: scene.sceneHeading,
-          title: scene.sceneTitle,
-          sceneType: scene.metadata.type ?? null,
-          sceneLocation: scene.metadata.location ?? null,
-          sceneAge: scene.metadata.age ?? null,
-          sceneTime: scene.metadata.time ?? null,
-          content: scene.body,
+          order: chapter.order,
+          title: chapter.title,
+          content: chapter.body,
         },
       })
     )
@@ -115,13 +98,9 @@ export async function replaceBookChapters(
 
   return {
     status: 'ok',
-    episodesFound: episodes.length,
-    scenesIngested: scenes.length,
+    title,
+    chaptersIngested: chapters.length,
     chaptersDeleted,
-    episodes: episodes.map((ep) => ({
-      number: ep.episodeNumber,
-      title: ep.episodeTitle,
-      scenes: ep.scenes.length,
-    })),
+    chapters: chapters.map((c) => ({ order: c.order, title: c.title })),
   };
 }

@@ -380,7 +380,7 @@ export default function EditBookPage() {
                 style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.7 }}
                 value={rawText}
                 onChange={e => setRawText(e.target.value)}
-                placeholder={'Chapter 1: The Beginning\n\nYour story text here...\n\nChapter 2: What Comes Next\n\nMore story...'}
+                placeholder={'# Book Title\n\n## Chapter 1: The Beginning\n\nYour story text here...\n\n## Chapter 2: What Comes Next\n\nMore story...'}
               />
             </div>
           )}

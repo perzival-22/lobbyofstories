@@ -1,234 +1,107 @@
 /**
  * parseBook.ts
  *
- * Parses the formatted Book text (produced by the admin formatting tool)
- * into structured episodes and scenes, with metadata extracted separately
- * from prose body.
+ * Parses the formatted Book text into a Book title + ordered Chapters.
  *
- * Input format per scene:
+ * This is the single source of truth for what counts as valid book text.
+ * The ONLY format recognized is:
  *
- *   # Episode N — "Title"
+ *   # Book Title
  *
- *   ## SCENE N | SCENE TITLE
+ *   ## Chapter 1: The Beginning
  *
- *   TYPE      Cold Open
- *   LOCATION  Caelford Rooftop, Downtown
- *   AGE       22
- *   TIME      7:42 PM
+ *   Prose body for chapter one…
  *
- *   Prose body begins here...
+ *   ## Chapter 2: What Comes Next
+ *
+ *   More prose…
+ *
+ * Rules:
+ *   - A single `#` line is the Book title (the first one wins). It is optional;
+ *     when absent, `title` is null and the caller keeps the existing book title.
+ *   - A `##` line starting with `Chapter <N>` opens a chapter. The title after
+ *     the number is optional and may be separated by `:`, `.`, `-`, `–` or `—`.
+ *     When omitted, the title falls back to `Chapter <N>`.
+ *   - Chapters are renumbered into a clean 1..N global `order` regardless of the
+ *     numbers the author typed, so ordering is always contiguous.
+ *   - Everything between one chapter heading and the next is that chapter's prose.
+ *   - Text before the first chapter heading (other than the title line) is ignored.
  */
 
-export interface SceneMetadata {
-  type?: string;
-  location?: string;
-  age?: string;
-  time?: string;
+export interface ParsedChapter {
+  order: number; // 1-based, contiguous across the whole book
+  title: string; // e.g. "The Beginning"
+  body: string;  // prose only
 }
 
-export interface ParsedScene {
-  sceneNumber: number;
-  sceneTitle: string;         // e.g. "THE EDGE"
-  sceneHeading: string;       // e.g. "SCENE 1 | THE EDGE"
-  metadata: SceneMetadata;
-  body: string;               // prose only, no metadata lines
-  orderInEpisode: number;
+export interface ParsedBook {
+  title: string | null; // from the `# …` line, or null when absent
+  chapters: ParsedChapter[];
 }
 
-export interface ParsedEpisode {
-  episodeNumber: number;
-  episodeTitle: string;       // e.g. "The Weight of Normal"
-  episodeHeading: string;     // e.g. 'Episode 1 — "The Weight of Normal"'
-  scenes: ParsedScene[];
-}
+// ─── Heading detection ────────────────────────────────────────────────────────
 
-// ─── Metadata line detection ─────────────────────────────────────────────────
+// `## Chapter 1: Title` / `## Chapter 1` / `## Chapter 1 — Title`
+const CHAPTER_HEADING_RE = /^##\s+Chapter\s+(\d+)\s*(?:[:.\-–—]\s*(.+))?$/i;
 
-const METADATA_KEYS = ['TYPE', 'LOCATION', 'AGE', 'TIME'] as const;
-type MetadataKey = typeof METADATA_KEYS[number];
-
-function isMetadataLine(line: string): boolean {
-  return METADATA_KEYS.some((key) => line.startsWith(key + ' '));
-}
-
-function parseMetadataBlock(lines: string[]): {
-  metadata: SceneMetadata;
-  bodyStartIndex: number;
-} {
-  const metadata: SceneMetadata = {};
-  let i = 0;
-
-  // Skip leading blank lines
-  while (i < lines.length && lines[i].trim() === '') i++;
-
-  // Read metadata lines (TYPE / LOCATION / AGE / TIME)
-  while (i < lines.length && (isMetadataLine(lines[i]) || lines[i].trim() === '')) {
-    const line = lines[i].trim();
-    if (isMetadataLine(line)) {
-      // Key is the first word, value is everything after (trimmed of extra spaces)
-      const [key, ...valueParts] = line.split(/\s{2,}/);
-      const value = valueParts.join(' ').trim();
-      switch (key as MetadataKey) {
-        case 'TYPE':     metadata.type     = value; break;
-        case 'LOCATION': metadata.location  = value; break;
-        case 'AGE':      metadata.age       = value; break;
-        case 'TIME':     metadata.time      = value; break;
-      }
-    }
-    i++;
-  }
-
-  // Skip the blank line(s) separating metadata from prose
-  while (i < lines.length && lines[i].trim() === '') i++;
-
-  return { metadata, bodyStartIndex: i };
-}
-
-// ─── Scene parser ─────────────────────────────────────────────────────────────
-
-const SCENE_HEADING_RE = /^##\s+SCENE\s+(\d+)\s*\|\s*(.+)$/;
-
-function parseSceneBlock(
-  sceneHeadingLine: string,
-  sceneBodyLines: string[],
-  orderInEpisode: number
-): ParsedScene {
-  const match = sceneHeadingLine.match(SCENE_HEADING_RE);
-  if (!match) throw new Error(`Invalid scene heading: "${sceneHeadingLine}"`);
-
-  const sceneNumber = parseInt(match[1], 10);
-  const sceneTitle = match[2].trim();
-  const sceneHeading = `SCENE ${sceneNumber} | ${sceneTitle}`;
-
-  const { metadata, bodyStartIndex } = parseMetadataBlock(sceneBodyLines);
-
-  // Everything from bodyStartIndex onward is prose
-  const bodyLines = sceneBodyLines.slice(bodyStartIndex);
-
-  // Trim trailing blank lines from body
-  while (bodyLines.length > 0 && bodyLines[bodyLines.length - 1].trim() === '') {
-    bodyLines.pop();
-  }
-
-  const body = bodyLines.join('\n').trim();
-
-  return {
-    sceneNumber,
-    sceneTitle,
-    sceneHeading,
-    metadata,
-    body,
-    orderInEpisode,
-  };
-}
-
-// ─── Episode parser ───────────────────────────────────────────────────────────
-
-const EPISODE_HEADING_RE = /^#\s+Episode\s+(\d+)\s*[—–-]\s*["""']?(.+?)["""']?\s*$/;
-
-function parseEpisodeBlock(
-  episodeHeadingLine: string,
-  episodeBodyLines: string[]
-): ParsedEpisode {
-  const match = episodeHeadingLine.match(EPISODE_HEADING_RE);
-  if (!match) throw new Error(`Invalid episode heading: "${episodeHeadingLine}"`);
-
-  const episodeNumber = parseInt(match[1], 10);
-  const episodeTitle = match[2].trim();
-  const episodeHeading = episodeHeadingLine.replace(/^#\s+/, '').trim();
-
-  // Split episode body into scene blocks
-  const scenes: ParsedScene[] = [];
-  const lines = episodeBodyLines;
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (SCENE_HEADING_RE.test(line.trim())) {
-      const sceneHeadingLine = line.trim();
-      i++;
-
-      // Collect all lines until next scene heading or end
-      const sceneBodyLines: string[] = [];
-      while (i < lines.length && !SCENE_HEADING_RE.test(lines[i].trim())) {
-        sceneBodyLines.push(lines[i]);
-        i++;
-      }
-
-      scenes.push(
-        parseSceneBlock(sceneHeadingLine, sceneBodyLines, scenes.length + 1)
-      );
-    } else {
-      i++;
-    }
-  }
-
-  return {
-    episodeNumber,
-    episodeTitle,
-    episodeHeading,
-    scenes,
-  };
-}
+// `# Book Title` — a single-hash line (won't match `##` chapter lines).
+const TITLE_RE = /^#\s+(.+)$/;
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
-export function parseBookText(rawText: string): ParsedEpisode[] {
+export function parseBookText(rawText: string): ParsedBook {
   const lines = rawText.split('\n');
-  const episodes: ParsedEpisode[] = [];
 
-  let i = 0;
+  let title: string | null = null;
+  const chapters: ParsedChapter[] = [];
 
-  while (i < lines.length) {
-    const line = lines[i];
+  let current: { order: number; title: string; bodyLines: string[] } | null = null;
+  let order = 0;
 
-    if (EPISODE_HEADING_RE.test(line.trim())) {
-      const episodeHeadingLine = line.trim();
-      i++;
+  const flush = () => {
+    if (!current) return;
+    const bodyLines = [...current.bodyLines];
+    // Trim leading + trailing blank lines from the prose body.
+    while (bodyLines.length && bodyLines[0].trim() === '') bodyLines.shift();
+    while (bodyLines.length && bodyLines[bodyLines.length - 1].trim() === '') bodyLines.pop();
+    chapters.push({
+      order: current.order,
+      title: current.title,
+      body: bodyLines.join('\n').trim(),
+    });
+    current = null;
+  };
 
-      // Collect all lines until next episode heading or end
-      const episodeBodyLines: string[] = [];
-      while (i < lines.length && !EPISODE_HEADING_RE.test(lines[i].trim())) {
-        episodeBodyLines.push(lines[i]);
-        i++;
-      }
+  for (const line of lines) {
+    const trimmed = line.trim();
 
-      try {
-        episodes.push(parseEpisodeBlock(episodeHeadingLine, episodeBodyLines));
-      } catch (err) {
-        console.error(`Failed to parse episode at "${episodeHeadingLine}":`, err);
-      }
-    } else {
-      i++;
+    const chapterMatch = trimmed.match(CHAPTER_HEADING_RE);
+    if (chapterMatch) {
+      flush();
+      order += 1;
+      const number = chapterMatch[1];
+      const chapterTitle = chapterMatch[2]?.trim() || `Chapter ${number}`;
+      current = { order, title: chapterTitle, bodyLines: [] };
+      continue;
     }
+
+    // Capture the book title only from the preamble (before the first chapter),
+    // and only the first one we see.
+    if (!current && title === null) {
+      const titleMatch = trimmed.match(TITLE_RE);
+      if (titleMatch) {
+        title = titleMatch[1].trim();
+        continue;
+      }
+    }
+
+    if (current) {
+      current.bodyLines.push(line);
+    }
+    // Lines before the first chapter (other than the title) are ignored.
   }
 
-  return episodes;
-}
+  flush();
 
-// ─── Utility: flat scene list with global order ───────────────────────────────
-
-export interface FlatScene extends ParsedScene {
-  episodeNumber: number;
-  episodeTitle: string;
-  globalOrder: number;  // 1-based across all episodes
-}
-
-export function flattenScenes(episodes: ParsedEpisode[]): FlatScene[] {
-  const flat: FlatScene[] = [];
-  let globalOrder = 1;
-
-  for (const ep of episodes) {
-    for (const scene of ep.scenes) {
-      flat.push({
-        ...scene,
-        episodeNumber: ep.episodeNumber,
-        episodeTitle: ep.episodeTitle,
-        globalOrder: globalOrder++,
-      });
-    }
-  }
-
-  return flat;
+  return { title, chapters };
 }

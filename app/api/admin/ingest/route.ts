@@ -6,29 +6,43 @@
  * Body (JSON):
  *   {
  *     bookId:       string,   // existing Book record id
- *     text:         string,   // full pasted book text (formatted output)
+ *     text:         string,   // full pasted book text (Book title + Chapters)
  *     mode:         "replace" | "append"   // default: "replace"
  *     confirmReset: boolean   // required to delete now-orphaned chapters
  *   }
  *
  * Auth: Clerk — admin only (same guard as other admin routes).
  *
+ * Expected text format (see lib/parseBook.ts):
+ *
+ *   # Book Title
+ *
+ *   ## Chapter 1: The Beginning
+ *   Prose…
+ *
+ *   ## Chapter 2: What Comes Next
+ *   Prose…
+ *
  * What it does:
- *   1. Parses the pasted text into episodes → scenes via parseBookText()
- *   2. In "replace" mode: upserts each scene by [bookId, order] (preserving
+ *   1. Parses the pasted text into a Book title + Chapters via parseBookText()
+ *   2. In "replace" mode: upserts each chapter by [bookId, order] (preserving
  *      reader progress) and deletes only chapters whose order no longer exists.
  *      That deletion is destructive, so it requires confirmReset: true — without
  *      it the route returns 409 with the chapter/progress counts at risk.
- *   3. In "append" mode: upserts scenes after the current last chapter.
- *   4. Returns a summary
+ *   3. In "append" mode: upserts chapters after the current last chapter.
+ *   4. When the text carries a `# …` title line, the Book title is updated to it.
+ *   5. Returns a summary
  */
 
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { parseBookText, flattenScenes } from '@/lib/parseBook';
+import { parseBookText } from '@/lib/parseBook';
 import { replaceBookChapters } from '@/lib/ingestChapters';
 import { isAdmin } from '@/lib/auth';
+
+const NO_CHAPTERS_ERROR =
+  'No chapters found. Expected "## Chapter 1: Title" headings (optionally preceded by a "# Book Title" line).';
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
@@ -71,10 +85,7 @@ export async function POST(req: NextRequest) {
     const result = await replaceBookChapters(bookId, text, { confirmReset });
 
     if (result.status === 'empty') {
-      return NextResponse.json(
-        { error: 'No episodes found. Check that the text starts with # Episode headings.' },
-        { status: 422 }
-      );
+      return NextResponse.json({ error: NO_CHAPTERS_ERROR }, { status: 422 });
     }
 
     if (result.status === 'needs-confirm') {
@@ -90,29 +101,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Book title comes from the pasted text when a `# …` line is present.
+    if (result.title) {
+      await prisma.book.update({
+        where: { id: bookId },
+        data: { title: result.title },
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       summary: {
         bookId,
         mode,
-        episodesFound: result.episodesFound,
-        scenesIngested: result.scenesIngested,
+        title: result.title,
+        chaptersIngested: result.chaptersIngested,
         chaptersDeleted: result.chaptersDeleted,
-        episodes: result.episodes,
+        chapters: result.chapters,
       },
     });
   }
 
-  // ── Append mode: add scenes after the existing last chapter ────────────────
-  const episodes = parseBookText(text);
-  if (episodes.length === 0) {
-    return NextResponse.json(
-      { error: 'No episodes found. Check that the text starts with # Episode headings.' },
-      { status: 422 }
-    );
+  // ── Append mode: add chapters after the existing last chapter ──────────────
+  const { title, chapters } = parseBookText(text);
+  if (chapters.length === 0) {
+    return NextResponse.json({ error: NO_CHAPTERS_ERROR }, { status: 422 });
   }
-
-  const scenes = flattenScenes(episodes);
 
   const lastChapter = await prisma.chapter.findFirst({
     where: { bookId },
@@ -121,56 +135,40 @@ export async function POST(req: NextRequest) {
   const orderOffset = lastChapter?.order ?? 0;
 
   const created = await prisma.$transaction(
-    scenes.map((scene) =>
+    chapters.map((chapter) =>
       prisma.chapter.upsert({
         where: {
           bookId_order: {
             bookId,
-            order: scene.globalOrder + orderOffset,
+            order: chapter.order + orderOffset,
           },
         },
         update: {
-          episodeNumber: scene.episodeNumber,
-          episodeTitle:  scene.episodeTitle,
-          sceneNumber:   scene.sceneNumber,
-          sceneHeading:  scene.sceneHeading,
-          title:         scene.sceneTitle,
-          sceneType:     scene.metadata.type     ?? null,
-          sceneLocation: scene.metadata.location ?? null,
-          sceneAge:      scene.metadata.age      ?? null,
-          sceneTime:     scene.metadata.time     ?? null,
-          content:       scene.body,
+          title: chapter.title,
+          content: chapter.body,
         },
         create: {
           bookId,
-          order:         scene.globalOrder + orderOffset,
-          episodeNumber: scene.episodeNumber,
-          episodeTitle:  scene.episodeTitle,
-          sceneNumber:   scene.sceneNumber,
-          sceneHeading:  scene.sceneHeading,
-          title:         scene.sceneTitle,
-          sceneType:     scene.metadata.type     ?? null,
-          sceneLocation: scene.metadata.location ?? null,
-          sceneAge:      scene.metadata.age      ?? null,
-          sceneTime:     scene.metadata.time     ?? null,
-          content:       scene.body,
+          order: chapter.order + orderOffset,
+          title: chapter.title,
+          content: chapter.body,
         },
       })
     )
   );
+
+  if (title) {
+    await prisma.book.update({ where: { id: bookId }, data: { title } });
+  }
 
   return NextResponse.json({
     ok: true,
     summary: {
       bookId,
       mode,
-      episodesFound:  episodes.length,
-      scenesIngested: created.length,
-      episodes: episodes.map((ep) => ({
-        number: ep.episodeNumber,
-        title:  ep.episodeTitle,
-        scenes: ep.scenes.length,
-      })),
+      title,
+      chaptersIngested: created.length,
+      chapters: chapters.map((c) => ({ order: c.order, title: c.title })),
     },
   });
 }

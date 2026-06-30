@@ -12,10 +12,6 @@ type Chapter = {
   title: string
   order: number
   wordCount?: number
-  sceneType?: string | null
-  sceneLocation?: string | null
-  sceneAge?: string | null
-  sceneTime?: string | null
 }
 
 type Props = {
@@ -328,12 +324,6 @@ export default function ReaderClient({
 
   const completedCount = Object.values(localProgress).filter(p => p.completed).length
 
-  const hasSceneMeta =
-    currentChapter.sceneType ||
-    currentChapter.sceneLocation ||
-    currentChapter.sceneAge ||
-    currentChapter.sceneTime
-
   // ------- Render -------
 
   return (
@@ -522,23 +512,6 @@ export default function ReaderClient({
               <p style={{ fontSize: '0.72rem', color: 'var(--reader-muted)', marginTop: '0.5rem' }}>
                 ~{Math.ceil(currentChapter.wordCount / 200)} min read
               </p>
-            )}
-            {/* Scene metadata (rendered only where present) */}
-            {hasSceneMeta && (
-              <div className="reader-scene-meta">
-                {currentChapter.sceneType && (
-                  <span className="reader-scene-badge">{currentChapter.sceneType}</span>
-                )}
-                {currentChapter.sceneLocation && (
-                  <span className="reader-scene-item">{currentChapter.sceneLocation}</span>
-                )}
-                {currentChapter.sceneAge && (
-                  <span className="reader-scene-item">Age {currentChapter.sceneAge}</span>
-                )}
-                {currentChapter.sceneTime && (
-                  <span className="reader-scene-item">{currentChapter.sceneTime}</span>
-                )}
-              </div>
             )}
           </div>
 

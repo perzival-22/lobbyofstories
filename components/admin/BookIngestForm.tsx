@@ -4,7 +4,12 @@
  * components/admin/BookIngestForm.tsx
  *
  * Admin UI for pasting formatted book text and ingesting it into the DB.
- * Shows a live parse preview (episode/scene count) before committing.
+ * Shows a live parse preview (chapter count) before committing.
+ *
+ * Expected format (see lib/parseBook.ts):
+ *   # Book Title
+ *   ## Chapter 1: Title
+ *   prose…
  *
  * Usage:
  *   <BookIngestForm bookId="clxyz..." bookTitle="Valerie Klaś: Origins" />
@@ -22,9 +27,9 @@ type IngestMode = "replace" | "append";
 type Status = "idle" | "previewing" | "submitting" | "success" | "error";
 
 interface ParsePreview {
-  episodeCount: number;
-  sceneCount: number;
-  episodes: { number: number; title: string; scenes: number }[];
+  bookTitle: string | null;
+  chapterCount: number;
+  chapters: { order: number; title: string }[];
 }
 
 export function BookIngestForm({ bookId, bookTitle }: Props) {
@@ -47,15 +52,11 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
       }
 
       try {
-        const episodes = parseBookText(val);
+        const { title, chapters } = parseBookText(val);
         setPreview({
-          episodeCount: episodes.length,
-          sceneCount: episodes.reduce((acc, ep) => acc + ep.scenes.length, 0),
-          episodes: episodes.map((ep) => ({
-            number: ep.episodeNumber,
-            title: ep.episodeTitle,
-            scenes: ep.scenes.length,
-          })),
+          bookTitle: title,
+          chapterCount: chapters.length,
+          chapters: chapters.map((c) => ({ order: c.order, title: c.title })),
         });
       } catch {
         setPreview(null);
@@ -85,7 +86,7 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
       }
 
       setSuccessMsg(
-        `Ingested ${data.summary.scenesIngested} scenes across ${data.summary.episodesFound} episodes.`
+        `Ingested ${data.summary.chaptersIngested} chapter${data.summary.chaptersIngested !== 1 ? "s" : ""}.`
       );
       setStatus("success");
       setText("");
@@ -96,7 +97,7 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
     }
   };
 
-  const isReady = preview && preview.sceneCount > 0 && status !== "submitting";
+  const isReady = preview && preview.chapterCount > 0 && status !== "submitting";
 
   return (
     <div className="ingest-form">
@@ -104,7 +105,7 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
         <h2 className="ingest-form__title">Paste Book Text</h2>
         <p className="ingest-form__subtitle">
           <strong>{bookTitle}</strong> — paste the fully formatted book text
-          below. Episodes and scenes are auto-detected.
+          below. The book title and chapters are auto-detected.
         </p>
       </div>
 
@@ -134,7 +135,7 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
         className="ingest-form__textarea"
         value={text}
         onChange={handleTextChange}
-        placeholder={`Paste the formatted book text here…\n\nExpected format:\n# Episode 1 — "Title"\n\n## SCENE 1 | SCENE NAME\n\nTYPE      Present\nLOCATION  …\nAGE       22\nTIME      …\n\nProse body…`}
+        placeholder={`Paste the formatted book text here…\n\nExpected format:\n# Book Title\n\n## Chapter 1: The Beginning\n\nProse body…\n\n## Chapter 2: What Comes Next\n\nMore prose…`}
         rows={20}
         disabled={status === "submitting"}
         spellCheck={false}
@@ -144,19 +145,20 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
       {preview && (
         <div className="ingest-form__preview">
           <div className="ingest-form__preview-summary">
+            {preview.bookTitle && (
+              <>
+                Title: <strong>{preview.bookTitle}</strong>
+                {" · "}
+              </>
+            )}
             Detected{" "}
-            <strong>{preview.episodeCount} episode{preview.episodeCount !== 1 ? "s" : ""}</strong>
-            {" · "}
-            <strong>{preview.sceneCount} scene{preview.sceneCount !== 1 ? "s" : ""}</strong>
+            <strong>{preview.chapterCount} chapter{preview.chapterCount !== 1 ? "s" : ""}</strong>
           </div>
           <ul className="ingest-form__preview-list">
-            {preview.episodes.map((ep) => (
-              <li key={ep.number}>
-                <span className="ingest-form__preview-ep">Ep. {ep.number}</span>
-                {ep.title}
-                <span className="ingest-form__preview-count">
-                  {ep.scenes} scene{ep.scenes !== 1 ? "s" : ""}
-                </span>
+            {preview.chapters.map((ch) => (
+              <li key={ch.order}>
+                <span className="ingest-form__preview-ep">{String(ch.order).padStart(2, "0")}</span>
+                {ch.title}
               </li>
             ))}
           </ul>
@@ -179,7 +181,7 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
       >
         {status === "submitting"
           ? "Ingesting…"
-          : `Ingest ${preview?.sceneCount ?? 0} scenes`}
+          : `Ingest ${preview?.chapterCount ?? 0} chapter${preview?.chapterCount !== 1 ? "s" : ""}`}
       </button>
     </div>
   );

@@ -1,7 +1,7 @@
 // prisma/schema.prisma
 //
 // Run after changes:
-//   npx prisma migrate dev --name add_scene_metadata
+//   npx prisma db push
 //   npx prisma generate
 
 generator client {
@@ -41,33 +41,17 @@ model Book {
   chapters Chapter[]
 }
 
-// Chapter = one Scene in the reader.
-// Episodes group scenes via episodeNumber/episodeTitle fields.
+// Chapter = one chapter in the reader (Book title + Chapters format).
 model Chapter {
   id      String @id @default(cuid())
   bookId  String
   book    Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
 
-  // ── Ordering ──────────────────────────────────────────────────────────────
-  order   Int    // Global order across the whole book (1, 2, 3 ... N)
+  // Global order across the whole book (1, 2, 3 ... N)
+  order   Int
 
-  // ── Episode info ──────────────────────────────────────────────────────────
-  episodeNumber Int    @default(1)
-  episodeTitle  String @default("")
-
-  // ── Scene info ────────────────────────────────────────────────────────────
-  sceneNumber  Int    @default(1)
-  sceneHeading String @default("")
-  title        String  // e.g. "THE EDGE"
-
-  // ── Scene metadata (extracted from the formatted text header block) ───────
-  sceneType     String?  // e.g. "Cold Open", "Present", "Flashback", "Past"
-  sceneLocation String?  // e.g. "Caelford Rooftop, Downtown"
-  sceneAge      String?  // e.g. "22"
-  sceneTime     String?  // e.g. "7:42 PM" or "Last Night · 11:17 PM"
-
-  // ── Prose body ────────────────────────────────────────────────────────────
-  content String  // Prose only — NO metadata lines in here
+  title   String  // e.g. "The Beginning"
+  content String  // Prose body
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -75,7 +59,6 @@ model Chapter {
   readingProgress ReadingProgress[]
 
   @@unique([bookId, order])
-  @@index([bookId, episodeNumber])
 }
 
 model ReadingProgress {

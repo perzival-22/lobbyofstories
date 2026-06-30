@@ -30,10 +30,6 @@ export default async function ReaderPage({ params, searchParams }: Props) {
           title: true,
           order: true,
           content: true,
-          sceneType: true,
-          sceneLocation: true,
-          sceneAge: true,
-          sceneTime: true,
         },
       },
     },
@@ -72,10 +68,6 @@ export default async function ReaderPage({ params, searchParams }: Props) {
     title: ch.title,
     order: ch.order,
     wordCount: ch.content.split(/\s+/).filter(Boolean).length,
-    sceneType: ch.sceneType,
-    sceneLocation: ch.sceneLocation,
-    sceneAge: ch.sceneAge,
-    sceneTime: ch.sceneTime,
   }))
 
   return (

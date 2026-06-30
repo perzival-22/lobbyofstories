@@ -75,7 +75,11 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
       if (result.status === 'empty') {
         return NextResponse.json(
-          { error: 'No episodes found. Check that the text starts with # Episode headings.' },
+          {
+            error:
+              'No chapters found. Expected "## Chapter 1: Title" headings ' +
+              '(optionally preceded by a "# Book Title" line).',
+          },
           { status: 422 }
         )
       }
@@ -91,6 +95,12 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
           },
           { status: 409 }
         )
+      }
+
+      // The book title in the pasted text (the `# …` line) takes precedence
+      // over the form's title field when present.
+      if (result.status === 'ok' && result.title) {
+        updateData.title = result.title
       }
     }
 

@@ -89,31 +89,6 @@ a {
   color: var(--reader-text);
 }
 
-/* Scene metadata row in the chapter heading */
-.reader-scene-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.9rem;
-  margin-top: 0.85rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  color: var(--reader-muted);
-}
-.reader-scene-badge {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.62rem;
-  padding: 0.18rem 0.5rem;
-  border: 1px solid var(--gold-dim);
-  border-radius: 2px;
-  color: var(--gold);
-}
-.reader-scene-item {
-  display: inline-flex;
-  align-items: center;
-}
-
 /* Reader prose */
 .prose-reader {
   font-family: var(--font-lora), Georgia, serif;

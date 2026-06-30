@@ -216,9 +216,10 @@ export default function NewBookPage() {
         <div>
           <label style={labelStyle}>Story Text</label>
           <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
-            Paste the full story. Chapters are split automatically on headings that start with
-            Chapter, Part, Episode, Scene, Prologue, Epilogue, a number followed by a period,
-            or Markdown # headings. If no headings are found, the entire text becomes one chapter.
+            Paste the full story in the Book title + Chapters format: an optional
+            <code> # Book Title</code> line, then a <code>## Chapter N: Title</code> heading
+            before each chapter&apos;s prose. A <code># Book Title</code> line overrides the
+            title above.
           </p>
           <textarea
             rows={20}
@@ -226,7 +227,7 @@ export default function NewBookPage() {
             value={rawText}
             onChange={e => setRawText(e.target.value)}
             placeholder={
-              'Chapter 1: The Beginning\n\nYour story text here...\n\nChapter 2: What Comes Next\n\nMore story...'
+              '# Book Title\n\n## Chapter 1: The Beginning\n\nYour story text here...\n\n## Chapter 2: What Comes Next\n\nMore story...'
             }
           />
           {rawText.trim() && (
