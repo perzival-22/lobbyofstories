@@ -97,6 +97,7 @@ a {
   color: var(--reader-text, var(--paper));
   max-width: 68ch;
   margin: 0 auto;
+  animation: prose-fade-in 0.35s ease;
 }
 
 .prose-reader p {
@@ -117,4 +118,30 @@ a {
 .reader-loading {
   animation: reader-loading-pulse 1.4s ease-in-out infinite;
   text-indent: 0;
+}
+
+/* Chapter content fade-in on mount / chapter switch */
+@keyframes prose-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Ornamental section divider — used at chapter open and close */
+.chapter-ornament {
+  text-align: center;
+  letter-spacing: 0.5em;
+  color: var(--gold-dim);
+  font-size: 0.65rem;
+  user-select: none;
+}
+
+/* Drop cap on the opening letter of each chapter */
+.prose-reader p:first-of-type::first-letter {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 3.8em;
+  line-height: 0.82;
+  float: left;
+  margin-right: 0.08em;
+  margin-top: 0.05em;
+  color: var(--gold);
 }

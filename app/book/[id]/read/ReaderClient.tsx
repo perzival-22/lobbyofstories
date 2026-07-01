@@ -46,7 +46,7 @@ export default function ReaderClient({
     [initialChapterId]: initialChapterContent,
   })
   const [contentError, setContentError] = useState(false)
-  const [fontSize, setFontSize] = useState(18)
+  const [fontSize, setFontSize] = useState(19)
   const [theme, setTheme] = useState<Theme>('dark')
   const [showTOC, setShowTOC] = useState(false)
   const [readProgress, setReadProgress] = useState(0)
@@ -399,15 +399,26 @@ export default function ReaderClient({
             {theme === 'dark' ? '☀' : '☾'}
           </button>
           <button
-            onClick={() => setFontSize(s => Math.max(14, s - 1))}
+            onClick={() => setFontSize(s => Math.max(13, s - 1))}
             aria-label="Decrease font size"
             className="leading-none transition-colors reader-link"
             style={{ color: 'var(--reader-muted)', fontSize: '1rem' }}
           >
             A−
           </button>
+          <span
+            style={{
+              color: 'var(--reader-muted)',
+              fontSize: '0.7rem',
+              minWidth: '2.2rem',
+              textAlign: 'center',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {fontSize}px
+          </span>
           <button
-            onClick={() => setFontSize(s => Math.min(26, s + 1))}
+            onClick={() => setFontSize(s => Math.min(28, s + 1))}
             aria-label="Increase font size"
             className="leading-none transition-colors reader-link"
             style={{ color: 'var(--reader-muted)', fontSize: '1.15rem' }}
@@ -500,14 +511,13 @@ export default function ReaderClient({
       >
         <div className="px-6 py-12">
           {/* Chapter heading */}
-          <div className="max-w-[68ch] mx-auto mb-10">
+          <div className="max-w-[68ch] mx-auto mb-8">
             <p className="text-xs tracking-widest uppercase mb-4" style={{ color: 'var(--gold-dim)' }}>
               Chapter {String(currentChapter.order).padStart(2, '0')}
             </p>
             <h2 className="text-3xl" style={{ fontFamily: 'var(--font-playfair), serif' }}>
               {currentChapter.title}
             </h2>
-            {/* TASK-10: Reading time estimate */}
             {currentChapter.wordCount != null && (
               <p style={{ fontSize: '0.72rem', color: 'var(--reader-muted)', marginTop: '0.5rem' }}>
                 ~{Math.ceil(currentChapter.wordCount / 200)} min read
@@ -515,8 +525,11 @@ export default function ReaderClient({
             )}
           </div>
 
+          {/* Opening ornament */}
+          <div className="chapter-ornament max-w-[68ch] mx-auto mb-8">✦ ✦ ✦</div>
+
           {/* Prose body */}
-          <div className="prose-reader" style={{ fontSize: `${fontSize}px` }}>
+          <div key={currentChapterId + (isCurrentLoaded ? ':loaded' : ':loading')} className="prose-reader" style={{ fontSize: `${fontSize}px` }}>
             {isCurrentLoaded ? (
               paragraphs.map((para, i) => <p key={i}>{para}</p>)
             ) : contentError ? (
@@ -530,9 +543,17 @@ export default function ReaderClient({
             )}
           </div>
 
+          {/* End-of-chapter marker */}
+          <div className="max-w-[68ch] mx-auto mt-16 mb-8 text-center">
+            <div className="chapter-ornament">✦ ✦ ✦</div>
+            <p style={{ fontSize: '0.68rem', color: 'var(--gold-dim)', letterSpacing: '0.15em', textTransform: 'uppercase', marginTop: '0.75rem' }}>
+              End of Chapter {String(currentChapter.order).padStart(2, '0')}
+            </p>
+          </div>
+
           {/* Prev / Next navigation */}
           <div
-            className="max-w-[68ch] mx-auto mt-20 pb-16 flex items-start justify-between"
+            className="max-w-[68ch] mx-auto mt-2 pb-16 flex items-start justify-between"
             style={{ borderTop: '1px solid var(--reader-border)', paddingTop: '2rem' }}
           >
             {prevChapter ? (
