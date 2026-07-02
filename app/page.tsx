@@ -148,9 +148,9 @@ export default function LandingPage() {
                 lineHeight: 1.9,
               }}
             >
-              Original fiction, serialized and growing.
+              Original library, serialized and growing.
               <br />
-              Take a seat. The story is already in progress.
+              Take a seat. The stories are already in progress.
             </p>
             <button
               aria-label="Browse stories"

@@ -52,6 +52,9 @@ export default function ReaderClient({
   const [readProgress, setReadProgress] = useState(0)
   const [backHref, setBackHref] = useState(`/book/${bookId}`)
   const [backLabel, setBackLabel] = useState('← Back')
+  // Immersive mode: tapping the prose area on touch devices hides the toolbar
+  const [chromeVisible, setChromeVisible] = useState(true)
+  const coarsePointerRef = useRef(false)
 
   const [localProgress, setLocalProgress] = useState<Record<string, ProgressEntry>>(progressMap)
 
@@ -131,6 +134,11 @@ export default function ReaderClient({
       setBackHref('/discover')
       setBackLabel('← Discover')
     }
+  }, [])
+
+  // Tap-to-hide is touch-only; on mouse devices the toolbar stays put.
+  useEffect(() => {
+    coarsePointerRef.current = window.matchMedia('(pointer: coarse)').matches
   }, [])
 
   // ------- Progress Saving -------
@@ -229,6 +237,23 @@ export default function ReaderClient({
       }
     },
     [nextChapter, prevChapter, switchChapter]
+  )
+
+  // Tap the prose area (touch devices) to toggle the toolbar — immersive
+  // reading mode. Taps on links/buttons and active text selections are
+  // ignored; a tap while the TOC is open just closes the TOC.
+  const handleContentTap = useCallback(
+    (e: React.MouseEvent) => {
+      if (!coarsePointerRef.current) return
+      if ((e.target as HTMLElement).closest('a, button')) return
+      if (window.getSelection()?.toString()) return
+      if (showTOC) {
+        setShowTOC(false)
+        return
+      }
+      setChromeVisible(v => !v)
+    },
+    [showTOC]
   )
 
   // ------- TOC accessibility: Esc to close + focus trap while open -------
@@ -348,13 +373,23 @@ export default function ReaderClient({
         />
       </div>
 
+      {/* Collapsible chrome: toolbar + guest nudge hide in immersive mode */}
+      <div
+        style={{
+          flexShrink: 0,
+          overflow: 'hidden',
+          maxHeight: chromeVisible ? 240 : 0,
+          opacity: chromeVisible ? 1 : 0,
+          transition: 'max-height 0.3s ease, opacity 0.25s ease',
+        }}
+      >
       {/* Toolbar */}
       <header
-        className="flex-shrink-0 flex items-center justify-between px-6 py-3 gap-4"
+        className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 gap-3 sm:gap-4"
         style={{ borderBottom: '1px solid var(--reader-border)', background: 'var(--reader-surface)', minHeight: '52px' }}
       >
         {/* Left */}
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 sm:gap-5">
           <Link
             href={backHref}
             className="text-xs tracking-widest uppercase transition-colors reader-link"
@@ -388,7 +423,7 @@ export default function ReaderClient({
         </div>
 
         {/* Right: theme + font controls */}
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
           <button
             onClick={() => setTheme(t => (t === 'dark' ? 'sepia' : 'dark'))}
             aria-label={theme === 'dark' ? 'Switch to sepia theme' : 'Switch to dark theme'}
@@ -407,6 +442,7 @@ export default function ReaderClient({
             A−
           </button>
           <span
+            className="hidden sm:block"
             style={{
               color: 'var(--reader-muted)',
               fontSize: '0.7rem',
@@ -457,6 +493,7 @@ export default function ReaderClient({
           </SignInButton>
         </div>
       )}
+      </div>
 
       {/* TOC overlay */}
       {showTOC && (
@@ -506,6 +543,7 @@ export default function ReaderClient({
         onScroll={handleScroll}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
+        onClick={handleContentTap}
         className="flex-1 overflow-y-auto"
         style={{ overscrollBehavior: 'contain' }}
       >

@@ -9,7 +9,7 @@ export const revalidate = 60
 export default async function DiscoverPage() {
   const { userId: clerkId } = await auth()
 
-  const [books, recentProgress] = await Promise.all([
+  const [books, recentProgress, completedRecords] = await Promise.all([
     prisma.book.findMany({
       where: { status: 'PUBLISHED' },
       orderBy: { updatedAt: 'desc' },
@@ -33,7 +33,20 @@ export default async function DiscoverPage() {
           },
         })
       : Promise.resolve(null),
+    clerkId
+      ? prisma.readingProgress.findMany({
+          where: { user: { clerkId }, completed: true },
+          select: { chapter: { select: { bookId: true } } },
+        })
+      : Promise.resolve([]),
   ])
+
+  // Completed-chapter counts per book, for the progress bar on each card
+  const progressByBook: Record<string, number> = {}
+  for (const record of completedRecords) {
+    const bookId = record.chapter.bookId
+    progressByBook[bookId] = (progressByBook[bookId] ?? 0) + 1
+  }
 
   const currentlyReading = recentProgress
     ? {
@@ -73,6 +86,7 @@ export default async function DiscoverPage() {
           genres={genres}
           series={series}
           currentlyReading={currentlyReading}
+          progressByBook={progressByBook}
         />
       </div>
       <SiteFooter />

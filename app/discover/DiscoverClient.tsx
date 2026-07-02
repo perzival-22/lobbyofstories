@@ -32,6 +32,8 @@ type Props = {
   genres: string[]
   series: string[]
   currentlyReading: CurrentlyReading
+  // Completed-chapter count per book id (signed-in users only)
+  progressByBook: Record<string, number>
 }
 
 const chipStyle = (active: boolean) => ({
@@ -47,7 +49,7 @@ const chipStyle = (active: boolean) => ({
   transition: 'all 0.15s',
 })
 
-export default function DiscoverClient({ books, genres, series, currentlyReading }: Props) {
+export default function DiscoverClient({ books, genres, series, currentlyReading, progressByBook }: Props) {
   const [search, setSearch] = useState('')
   const [activeGenre, setActiveGenre] = useState<string | null>(null)
   const [activeSeries, setActiveSeries] = useState<string | null>(null)
@@ -260,7 +262,13 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filtered.map((book) => (
+          {filtered.map((book) => {
+            const completedChapters = progressByBook[book.id] ?? 0
+            const readPct =
+              book._count.chapters > 0
+                ? Math.min(100, Math.round((completedChapters / book._count.chapters) * 100))
+                : 0
+            return (
             <Link key={book.id} href={`/book/${book.id}`} className="group">
               <article
                 className="h-full transition-transform duration-300 group-hover:-translate-y-1"
@@ -326,10 +334,28 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                   <div className="text-xs mt-1" style={{ color: 'var(--gold-dim)' }}>
                     Updated {new Date(book.updatedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                   </div>
+                  {completedChapters > 0 && (
+                    <div className="mt-3">
+                      <div style={{ height: 2, background: '#2a2520', borderRadius: 1 }}>
+                        <div
+                          style={{
+                            height: 2,
+                            width: `${readPct}%`,
+                            background: 'var(--gold)',
+                            borderRadius: 1,
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs mt-1.5" style={{ color: 'var(--gold-dim)' }}>
+                        {readPct >= 100 ? 'Finished ✓' : `${readPct}% read`}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </article>
             </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
