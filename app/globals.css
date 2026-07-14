@@ -100,8 +100,11 @@ a {
   animation: prose-fade-in 0.35s ease;
 }
 
+/* Print-fiction convention: paragraphs separate by first-line indent, not by
+   vertical gaps. (With real per-line paragraphs — including one-beat dialogue
+   lines — the old 1.5em gap read like double-spaced chat.) */
 .prose-reader p {
-  margin-bottom: 1.5em;
+  margin-bottom: 0.35em;
   text-indent: 2em;
 }
 
@@ -135,8 +138,10 @@ a {
   user-select: none;
 }
 
-/* Drop cap on the opening letter of each chapter */
-.prose-reader p:first-of-type::first-letter {
+/* Drop cap on the opening letter of each chapter. Rendered as an explicit
+   span by the reader (not ::first-letter, which scoops leading dialogue
+   quotes up to display size — the reader skips the cap for those). */
+.drop-cap {
   font-family: var(--font-playfair), Georgia, serif;
   font-size: 3.8em;
   line-height: 0.82;
@@ -144,4 +149,50 @@ a {
   margin-right: 0.08em;
   margin-top: 0.05em;
   color: var(--gold);
+}
+
+/* ── Prose blocks (see lib/parseBook.ts parseChapterBlocks) ─────────────── */
+
+/* Scene break within a chapter */
+.prose-reader .scene-break {
+  text-align: center;
+  color: var(--gold-dim);
+  font-size: 0.75rem;
+  margin: 2.5em 0;
+  user-select: none;
+}
+
+/* Convention: the paragraph opening a new scene is not indented */
+.prose-reader .scene-break + p {
+  text-indent: 0;
+}
+
+/* Blockquote — epigraphs, letters, remembered voices */
+.prose-reader blockquote {
+  margin: 1.75em 1.5em 1.75em 2em;
+  font-style: italic;
+}
+
+/* Emphasis inside an already-italic quote flips back to roman */
+.prose-reader blockquote em {
+  font-style: normal;
+}
+
+/* Verse — poems, songs, inscriptions */
+.prose-reader .verse {
+  margin: 1.75em 1.5em 1.75em 2em;
+}
+
+/* Hard line breaks inside blockquote/verse */
+.prose-reader blockquote .line,
+.prose-reader .verse .line {
+  display: block;
+  text-indent: 0;
+}
+
+/* Stanza / paragraph gap inside blockquote/verse */
+.prose-reader blockquote .line-gap,
+.prose-reader .verse .line-gap {
+  display: block;
+  height: 1em;
 }

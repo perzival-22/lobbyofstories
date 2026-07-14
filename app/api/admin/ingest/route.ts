@@ -37,7 +37,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { parseBookText } from '@/lib/parseBook';
+import { parseBookText, countWords } from '@/lib/parseBook';
 import { replaceBookChapters } from '@/lib/ingestChapters';
 import { isAdmin } from '@/lib/auth';
 
@@ -146,12 +146,14 @@ export async function POST(req: NextRequest) {
         update: {
           title: chapter.title,
           content: chapter.body,
+          wordCount: countWords(chapter.body),
         },
         create: {
           bookId,
           order: chapter.order + orderOffset,
           title: chapter.title,
           content: chapter.body,
+          wordCount: countWords(chapter.body),
         },
       })
     )

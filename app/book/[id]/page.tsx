@@ -48,7 +48,7 @@ export default async function BookDetailPage({ params }: Props) {
     include: {
       chapters: {
         orderBy: { order: 'asc' },
-        select: { id: true, title: true, order: true, content: true },
+        select: { id: true, title: true, order: true, wordCount: true },
       },
     },
   })
@@ -167,8 +167,9 @@ export default async function BookDetailPage({ params }: Props) {
           </p>
           <div className="flex flex-col">
             {book.chapters.map((chapter, i) => {
-              const wordCount = chapter.content.split(/\s+/).length
-              const readMins = Math.ceil(wordCount / 200)
+              // wordCount is 0 for rows predating the column and not yet
+              // backfilled — hide the estimate rather than show "~0 min".
+              const readMins = Math.ceil(chapter.wordCount / 200)
               return (
                 <Link
                   key={chapter.id}
@@ -187,9 +188,11 @@ export default async function BookDetailPage({ params }: Props) {
                     {String(chapter.order).padStart(2, '0')}
                   </span>
                   <span className="flex-1 group-hover:text-white transition-colors">{chapter.title}</span>
-                  <span className="text-xs flex-shrink-0" style={{ color: 'var(--muted)' }}>
-                    ~{readMins} min
-                  </span>
+                  {readMins > 0 && (
+                    <span className="text-xs flex-shrink-0" style={{ color: 'var(--muted)' }}>
+                      ~{readMins} min
+                    </span>
+                  )}
                   <span
                     className="text-xs tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity"
                     style={{ color: 'var(--gold-dim)' }}

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { auth } from '@clerk/nextjs/server'
+import { parseChapterBlocks } from '@/lib/parseBook'
 import ReaderClient from './ReaderClient'
 
 export const dynamic = 'force-dynamic'
@@ -22,14 +23,14 @@ export default async function ReaderPage({ params, searchParams }: Props) {
     include: {
       chapters: {
         orderBy: { order: 'asc' },
-        // Pull `content` so we can compute wordCount server-side, but it is
-        // stripped from every chapter except the initial one before being sent
-        // to the client (see below) — the reader lazy-fetches the rest.
+        // Metadata only — chapter bodies stay in the database. The initial
+        // chapter's body is fetched separately below; the client lazy-fetches
+        // the rest via GET /api/books/[id]/chapters/[chapterId].
         select: {
           id: true,
           title: true,
           order: true,
-          content: true,
+          wordCount: true,
         },
       },
     },
@@ -41,6 +42,11 @@ export default async function ReaderPage({ params, searchParams }: Props) {
     ? book.chapters.find(c => c.id === chapterParam)
     : null
   const initialChapter = requestedChapter ?? book.chapters[0]
+
+  const initialBody = await prisma.chapter.findUnique({
+    where: { id: initialChapter.id },
+    select: { content: true },
+  })
 
   // Load reading progress for signed-in users
   let progressMap: Record<string, ProgressEntry> = {}
@@ -60,23 +66,13 @@ export default async function ReaderPage({ params, searchParams }: Props) {
     }
   }
 
-  // Send only chapter metadata (no `content`) to keep the initial HTML payload
-  // small. The body of the initial chapter is sent separately; the client
-  // lazy-fetches the rest via GET /api/books/[id]/chapters/[chapterId].
-  const chapterMeta = book.chapters.map(ch => ({
-    id: ch.id,
-    title: ch.title,
-    order: ch.order,
-    wordCount: ch.content.split(/\s+/).filter(Boolean).length,
-  }))
-
   return (
     <ReaderClient
       bookId={book.id}
       bookTitle={book.title}
-      chapters={chapterMeta}
+      chapters={book.chapters}
       initialChapterId={initialChapter.id}
-      initialChapterContent={initialChapter.content}
+      initialChapterBlocks={parseChapterBlocks(initialBody?.content ?? '')}
       progressMap={progressMap}
       isSignedIn={!!userId}
     />

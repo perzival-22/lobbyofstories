@@ -105,7 +105,9 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
         <h2 className="ingest-form__title">Paste Book Text</h2>
         <p className="ingest-form__subtitle">
           <strong>{bookTitle}</strong> — paste the fully formatted book text
-          below. The book title and chapters are auto-detected.
+          below. The book title and chapters are auto-detected. Inside chapter
+          prose: *italic*, **bold**, --- for a scene break, &gt; for quoted
+          lines (epigraphs, letters), | for verse (line breaks preserved).
         </p>
       </div>
 
@@ -135,7 +137,7 @@ export function BookIngestForm({ bookId, bookTitle }: Props) {
         className="ingest-form__textarea"
         value={text}
         onChange={handleTextChange}
-        placeholder={`Paste the formatted book text here…\n\nExpected format:\n# Book Title\n\n## Chapter 1: The Beginning\n\nProse body…\n\n## Chapter 2: What Comes Next\n\nMore prose…`}
+        placeholder={`Paste the formatted book text here…\n\nExpected format:\n# Book Title\n\n## Chapter 1: The Beginning\n\nProse with *italics* and **bold**…\n\n---\n\nA new scene after the break…\n\n> A quoted epigraph or letter,\n> line breaks preserved.\n\n| Verse, poems, or songs —\n| kept line by line.\n\n## Chapter 2: What Comes Next\n\nMore prose…`}
         rows={20}
         disabled={status === "submitting"}
         spellCheck={false}

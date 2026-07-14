@@ -19,7 +19,7 @@
  */
 
 import { prisma } from './db';
-import { parseBookText } from './parseBook';
+import { parseBookText, countWords } from './parseBook';
 
 export type IngestResult =
   // No chapters parsed from the text.
@@ -77,12 +77,14 @@ export async function replaceBookChapters(
         update: {
           title: chapter.title,
           content: chapter.body,
+          wordCount: countWords(chapter.body),
         },
         create: {
           bookId,
           order: chapter.order,
           title: chapter.title,
           content: chapter.body,
+          wordCount: countWords(chapter.body),
         },
       })
     )

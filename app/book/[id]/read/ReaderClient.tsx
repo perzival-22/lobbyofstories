@@ -1,17 +1,18 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { Fragment, useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { SignInButton } from '@clerk/nextjs'
+import type { ChapterBlock, InlineRun } from '@/lib/parseBook'
 import type { ProgressEntry } from './page'
 
-// Chapter metadata only — the body (`content`) is lazy-loaded on demand.
+// Chapter metadata only — the body is lazy-loaded on demand as typed blocks.
 type Chapter = {
   id: string
   title: string
   order: number
-  wordCount?: number
+  wordCount: number
 }
 
 type Props = {
@@ -19,19 +20,88 @@ type Props = {
   bookTitle: string
   chapters: Chapter[]
   initialChapterId: string
-  initialChapterContent: string
+  initialChapterBlocks: ChapterBlock[]
   progressMap: Record<string, ProgressEntry>
   isSignedIn: boolean
 }
 
 type Theme = 'dark' | 'sepia'
 
+// ------- Prose block rendering -------
+// Blocks arrive pre-parsed from the server (lib/parseBook.ts) and are rendered
+// as React elements — no HTML strings, so nothing to sanitize.
+
+function renderRuns(runs: InlineRun[]) {
+  return runs.map((run, i) => {
+    let node: ReactNode = run.text
+    if (run.strong) node = <strong>{node}</strong>
+    if (run.em) node = <em>{node}</em>
+    return <Fragment key={i}>{node}</Fragment>
+  })
+}
+
+// Hard-break-preserving lines for blockquote/verse; an empty line is a
+// stanza/paragraph gap.
+function renderLines(lines: InlineRun[][]) {
+  return lines.map((line, i) =>
+    line.length === 0 ? (
+      <span key={i} className="line-gap" aria-hidden="true" />
+    ) : (
+      <span key={i} className="line">
+        {renderRuns(line)}
+      </span>
+    )
+  )
+}
+
+// The chapter-opening paragraph gets a span-based drop cap. A plain
+// ::first-letter rule scooped up opening dialogue quotes ("G…) and rendered
+// them at display size — so the cap only applies when the chapter opens with
+// an unformatted letter, and falls back to a normal paragraph otherwise.
+function OpeningParagraph({ runs }: { runs: InlineRun[] }) {
+  const first = runs[0]
+  const chars = first ? Array.from(first.text) : []
+  if (!first || first.em || first.strong || !/^\p{L}$/u.test(chars[0] ?? '')) {
+    return <p>{renderRuns(runs)}</p>
+  }
+  const rest: InlineRun[] = [{ ...first, text: chars.slice(1).join('') }, ...runs.slice(1)]
+  return (
+    <p>
+      <span className="drop-cap">{chars[0]}</span>
+      {renderRuns(rest)}
+    </p>
+  )
+}
+
+function ProseBlocks({ blocks }: { blocks: ChapterBlock[] }) {
+  return (
+    <>
+      {blocks.map((block, i) => {
+        switch (block.type) {
+          case 'scene-break':
+            return <div key={i} className="scene-break" aria-hidden="true">✦</div>
+          case 'blockquote':
+            return <blockquote key={i}>{renderLines(block.lines)}</blockquote>
+          case 'verse':
+            return <div key={i} className="verse">{renderLines(block.lines)}</div>
+          case 'paragraph':
+            return i === 0 ? (
+              <OpeningParagraph key={i} runs={block.runs} />
+            ) : (
+              <p key={i}>{renderRuns(block.runs)}</p>
+            )
+        }
+      })}
+    </>
+  )
+}
+
 export default function ReaderClient({
   bookId,
   bookTitle,
   chapters,
   initialChapterId,
-  initialChapterContent,
+  initialChapterBlocks,
   progressMap,
   isSignedIn,
 }: Props) {
@@ -39,11 +109,11 @@ export default function ReaderClient({
 
   const [currentChapterId, setCurrentChapterId] = useState(initialChapterId)
 
-  // Cache of chapter bodies keyed by chapter id. Seeded with the initial
-  // chapter (sent by the server); other chapters are fetched on first visit
-  // and kept here so re-visits don't refetch.
-  const [contentCache, setContentCache] = useState<Record<string, string>>({
-    [initialChapterId]: initialChapterContent,
+  // Cache of chapter bodies (as parsed blocks) keyed by chapter id. Seeded
+  // with the initial chapter (sent by the server); other chapters are fetched
+  // on first visit and kept here so re-visits don't refetch.
+  const [contentCache, setContentCache] = useState<Record<string, ChapterBlock[]>>({
+    [initialChapterId]: initialChapterBlocks,
   })
   const [contentError, setContentError] = useState(false)
   const [fontSize, setFontSize] = useState(19)
@@ -82,9 +152,9 @@ export default function ReaderClient({
 
     fetch(`/api/books/${bookId}/chapters/${currentChapterId}`)
       .then(res => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then((data: { content?: string }) => {
+      .then((data: { blocks?: ChapterBlock[] }) => {
         if (cancelled) return
-        setContentCache(prev => ({ ...prev, [currentChapterId]: data.content ?? '' }))
+        setContentCache(prev => ({ ...prev, [currentChapterId]: data.blocks ?? [] }))
       })
       .catch(err => {
         if (cancelled) return
@@ -168,9 +238,53 @@ export default function ReaderClient({
     setReadProgress(Math.round((el.scrollTop / maxScroll) * 100))
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     saveTimeoutRef.current = setTimeout(() => {
+      // Null the ref when the save actually runs — the pagehide flush uses a
+      // non-null ref as its "there's an unsaved position" signal.
+      saveTimeoutRef.current = null
       saveProgress(currentChapterId, position, completed)
     }, 1500)
   }, [currentChapterId, saveProgress])
+
+  // Latest chapter id for event handlers registered once (pagehide flush).
+  const currentChapterIdRef = useRef(currentChapterId)
+  useEffect(() => {
+    currentChapterIdRef.current = currentChapterId
+  }, [currentChapterId])
+
+  // Flush the debounced save when the tab is hidden or closed — without this,
+  // closing the tab within 1.5s of the last scroll silently loses the
+  // reader's position. sendBeacon survives page teardown; fetch would not.
+  useEffect(() => {
+    if (!isSignedIn) return
+
+    const flush = () => {
+      if (!saveTimeoutRef.current) return // nothing pending
+      clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+      const el = contentRef.current
+      if (!el) return
+      const maxScroll = el.scrollHeight - el.clientHeight
+      if (maxScroll <= 0) return
+      const position = el.scrollTop / maxScroll
+      const payload = JSON.stringify({
+        chapterId: currentChapterIdRef.current,
+        scrollPosition: position,
+        completed: position > 0.95,
+      })
+      navigator.sendBeacon('/api/progress', new Blob([payload], { type: 'application/json' }))
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [isSignedIn])
 
   // ------- Chapter Switching -------
 
@@ -193,7 +307,11 @@ export default function ReaderClient({
     [currentChapterId, isSignedIn, saveProgress]
   )
 
-  // TASK-07: Keyboard shortcuts for chapter navigation
+  // TASK-07: Keyboard shortcuts. ←/→ flip chapters; ↑/↓/PageUp/PageDown/Space
+  // scroll — they must never change chapters, or a reader pressing ↓ to read
+  // further gets thrown out of the page they're on. The prose lives in an
+  // inner scroll container that never holds focus, so the browser's native
+  // key scrolling can't reach it; the reading keys are driven manually here.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
@@ -202,15 +320,56 @@ export default function ReaderClient({
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable
       ) return
-      if ((e.key === 'ArrowRight' || e.key === 'ArrowDown') && nextChapter) {
+      if (showTOC) return // the TOC overlay has its own key handling
+
+      if (e.key === 'ArrowRight' && nextChapter) {
         switchChapter(nextChapter.id)
-      } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowUp') && prevChapter) {
+        return
+      }
+      if (e.key === 'ArrowLeft' && prevChapter) {
         switchChapter(prevChapter.id)
+        return
+      }
+
+      const el = contentRef.current
+      if (!el) return
+      const page = el.clientHeight * 0.85
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          el.scrollBy({ top: 60 })
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          el.scrollBy({ top: -60 })
+          break
+        case 'PageDown':
+          e.preventDefault()
+          el.scrollBy({ top: page, behavior: 'smooth' })
+          break
+        case 'PageUp':
+          e.preventDefault()
+          el.scrollBy({ top: -page, behavior: 'smooth' })
+          break
+        case ' ':
+          // A focused button/link keeps Space for its native activation.
+          if (target.closest('button, a')) return
+          e.preventDefault()
+          el.scrollBy({ top: e.shiftKey ? -page : page, behavior: 'smooth' })
+          break
+        case 'Home':
+          e.preventDefault()
+          el.scrollTo({ top: 0 })
+          break
+        case 'End':
+          e.preventDefault()
+          el.scrollTo({ top: el.scrollHeight })
+          break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [nextChapter, prevChapter, switchChapter])
+  }, [nextChapter, prevChapter, switchChapter, showTOC])
 
   // ------- Mobile swipe navigation -------
   // Horizontal-dominant swipes flip chapters; vertical scroll is untouched
@@ -336,16 +495,29 @@ export default function ReaderClient({
     )
   }, [currentChapterId, isCurrentLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A chapter that fits entirely on screen has nothing to scroll, so the
+  // scroll handler never fires and the chapter could never be marked read —
+  // it would block the book from ever reaching 100%. Complete it on view.
+  // (Delayed until after the double-rAF scroll restore so layout is settled.)
+  useEffect(() => {
+    if (!isCurrentLoaded) return
+    const el = contentRef.current
+    if (!el) return
+    const chapterId = currentChapterId
+    const t = setTimeout(() => {
+      if (el.scrollHeight - el.clientHeight <= 0) {
+        setReadProgress(100)
+        if (!localProgress[chapterId]?.completed) {
+          saveProgress(chapterId, 1, true)
+        }
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [currentChapterId, isCurrentLoaded, saveProgress]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current) }
   }, [])
-
-  // ------- Content Rendering -------
-
-  const paragraphs = (currentContent ?? '')
-    .split(/\n\n+/)
-    .map(p => p.replace(/\n/g, ' ').trim())
-    .filter(Boolean)
 
   const completedCount = Object.values(localProgress).filter(p => p.completed).length
 
@@ -556,7 +728,7 @@ export default function ReaderClient({
             <h2 className="text-3xl" style={{ fontFamily: 'var(--font-playfair), serif' }}>
               {currentChapter.title}
             </h2>
-            {currentChapter.wordCount != null && (
+            {currentChapter.wordCount > 0 && (
               <p style={{ fontSize: '0.72rem', color: 'var(--reader-muted)', marginTop: '0.5rem' }}>
                 ~{Math.ceil(currentChapter.wordCount / 200)} min read
               </p>
@@ -569,7 +741,7 @@ export default function ReaderClient({
           {/* Prose body */}
           <div key={currentChapterId + (isCurrentLoaded ? ':loaded' : ':loading')} className="prose-reader" style={{ fontSize: `${fontSize}px` }}>
             {isCurrentLoaded ? (
-              paragraphs.map((para, i) => <p key={i}>{para}</p>)
+              <ProseBlocks blocks={currentContent ?? []} />
             ) : contentError ? (
               <p style={{ color: 'var(--reader-muted)', fontStyle: 'italic' }}>
                 This chapter could not be loaded. Switch away and back to retry.

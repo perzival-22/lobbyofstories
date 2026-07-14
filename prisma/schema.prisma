@@ -53,6 +53,11 @@ model Chapter {
   title   String  // e.g. "The Beginning"
   content String  // Prose body
 
+  // Word count of `content`, computed at ingest so pages never have to pull
+  // full chapter bodies just to show "~N min read". 0 = not yet backfilled
+  // (run scripts/backfill-wordcounts.ts once after adding this column).
+  wordCount Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
