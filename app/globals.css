@@ -27,12 +27,25 @@
   padding: 0;
 }
 
+/*
+  App-shell model. The browser window itself never scrolls: the body is locked
+  to the visible viewport (dvh) with overflow hidden, and each screen hands the
+  scroll to an inner container. This keeps bottom-anchored chrome still while
+  mobile browsers grow and shrink their own toolbars.
+*/
+html {
+  height: 100%;
+}
+
 body {
   background-color: var(--ink);
   color: var(--paper);
   font-family: var(--font-lora), Georgia, serif;
   line-height: 1.7;
-  min-height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  /* No rubber-banding or pull-to-refresh on the locked frame. */
+  overscroll-behavior: none;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -65,6 +78,200 @@ a {
   animation: lobby-swipe-bounce 1.8s ease-in-out infinite;
 }
 
+/* ══ APP SHELL ════════════════════════════════════════════════════════════ */
+
+/*
+   Three rows inside the locked frame: a static header, one scroll tube, and a
+   static nav island. Only `.app-main` moves, so neither the header nor the
+   island can be perturbed by a viewport resize.
+*/
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: env(safe-area-inset-top);
+  background: var(--ink);
+}
+
+/* Generic scroll tube for screens outside the shell (auth pages). */
+.app-scroll,
+.app-main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* A scroll that reaches its end must not chain up to the locked body. */
+  overscroll-behavior: contain;
+}
+
+.app-scroll {
+  height: 100%;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.app-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+@media (min-width: 640px) {
+  .app-header { padding: 1rem 2rem; }
+}
+
+.app-header__brand { min-width: 0; }
+.app-header__title {
+  display: block;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  color: var(--gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 640px) {
+  .app-header__title { font-size: 1.4rem; }
+}
+.app-header__sub {
+  display: none;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+@media (min-width: 640px) {
+  .app-header__sub { display: block; }
+}
+
+.app-header__trail {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* ── Back button ─────────────────────────────────────────────────────────── */
+.app-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.app-back:hover {
+  color: var(--paper);
+  border-color: var(--gold-dim);
+  background: rgba(255, 255, 255, 0.04);
+}
+.app-back:active { transform: scale(0.94); }
+
+/* ── Install prompt ──────────────────────────────────────────────────────── */
+.app-install {
+  padding: 0.35rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: rgba(201, 168, 76, 0.08);
+  border: 1px solid var(--gold-dim);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+.app-install:hover { background: rgba(201, 168, 76, 0.16); }
+
+/* ── Bottom nav island ───────────────────────────────────────────────────── */
+/*
+   A static sibling of the scroll tube, not a fixed overlay — it is laid out
+   once and never repositioned, so it cannot jump when mobile browser chrome
+   appears. The row is transparent; only the island itself takes pointer input.
+*/
+.app-nav {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.app-nav__island {
+  pointer-events: auto;
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  max-width: 100%;
+  padding: 0.3rem;
+  background: rgba(20, 18, 15, 0.88);
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 999px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.app-nav__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 4.75rem;
+  max-width: 8.5rem;
+  padding: 0.45rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.app-nav__item:hover { color: var(--paper); }
+.app-nav__item--active {
+  color: var(--gold);
+  background: rgba(201, 168, 76, 0.1);
+}
+
+.app-nav__icon {
+  display: block;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.app-nav__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The account slot hosts Clerk's own avatar button, which brings its own box. */
+.app-nav__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+}
+
 /* ══ READER ═══════════════════════════════════════════════════════════════ */
 
 /* ── Theming (dark default + sepia/light) ────────────────────────────────── */
@@ -80,6 +287,8 @@ a {
   display: flex;
   flex-direction: column;
   height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   overflow: hidden;
   overscroll-behavior: contain;
   background: var(--reader-bg);
@@ -484,6 +693,8 @@ a {
 .admin-shell {
   display: flex;
   height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   overflow: hidden;
   background: var(--admin-bg);
 }

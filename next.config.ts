@@ -49,6 +49,12 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: securityHeaders,
       },
+      {
+        // The worker must be revalidated on every load, or a stale copy keeps
+        // controlling the app long after a deploy has replaced it.
+        source: '/sw.js',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }],
+      },
     ]
   },
 }

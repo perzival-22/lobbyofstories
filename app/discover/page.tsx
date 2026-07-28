@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/db'
 import { auth } from '@clerk/nextjs/server'
-import SiteHeader from '@/components/SiteHeader'
-import SiteFooter from '@/components/SiteFooter'
+import AppShell from '@/components/AppShell'
 import DiscoverClient from './DiscoverClient'
 
 export const revalidate = 60
@@ -65,9 +64,8 @@ export default async function DiscoverPage() {
   const series = [...new Set(books.flatMap((b) => (b.series ? [b.series] : [])))]
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--ink)' }}>
-      <SiteHeader activePage="discover" />
-      <div className="px-8 py-12 max-w-6xl mx-auto">
+    <AppShell active="home" showBack={false}>
+      <div className="px-4 sm:px-8 py-10 sm:py-12 max-w-6xl mx-auto">
         <div className="mb-10">
           <h2 className="text-4xl mb-2" style={{ fontFamily: 'var(--font-playfair), serif' }}>
             Discover
@@ -89,7 +87,6 @@ export default async function DiscoverPage() {
           progressByBook={progressByBook}
         />
       </div>
-      <SiteFooter />
-    </div>
+    </AppShell>
   )
 }

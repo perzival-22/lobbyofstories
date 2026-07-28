@@ -4,8 +4,7 @@ import Image from 'next/image'
 import type { Metadata } from 'next'
 import { prisma } from '@/lib/db'
 import { auth } from '@clerk/nextjs/server'
-import SiteHeader from '@/components/SiteHeader'
-import SiteFooter from '@/components/SiteFooter'
+import AppShell from '@/components/AppShell'
 
 export const revalidate = 60
 
@@ -81,18 +80,8 @@ export default async function BookDetailPage({ params }: Props) {
   const ctaChapterId = resumeChapterId ?? firstChapterId
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--ink)' }}>
-      <SiteHeader />
-
-      <div className="px-8 py-16 max-w-5xl mx-auto">
-        <Link
-          href="/discover"
-          className="text-xs tracking-widest uppercase mb-12 block transition-colors hover:text-white"
-          style={{ color: 'var(--muted)' }}
-        >
-          ← All Stories
-        </Link>
-
+    <AppShell active="book">
+      <div className="px-4 sm:px-8 py-10 sm:py-16 max-w-5xl mx-auto">
         {/* Hero row */}
         <div className="flex flex-col md:flex-row gap-12 mb-20">
           {/* Cover */}
@@ -205,8 +194,6 @@ export default async function BookDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
-
-      <SiteFooter />
-    </div>
+    </AppShell>
   )
 }

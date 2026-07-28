@@ -3,7 +3,7 @@ import Link from 'next/link'
 export default function BookNotFound() {
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center"
+      className="h-full flex flex-col items-center justify-center p-6 text-center"
       style={{ background: 'var(--ink)', color: 'var(--muted)' }}
     >
       <h1

@@ -2,8 +2,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { prisma } from '@/lib/db'
 import { auth } from '@clerk/nextjs/server'
-import SiteHeader from '@/components/SiteHeader'
-import SiteFooter from '@/components/SiteFooter'
+import AppShell from '@/components/AppShell'
 
 export const dynamic = 'force-dynamic'
 
@@ -212,10 +211,8 @@ export default async function LibraryPage() {
   const finished = shelf.filter(b => b.totalChapters > 0 && b.completedChapters >= b.totalChapters)
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--ink)' }}>
-      <SiteHeader activePage="library" />
-
-      <div className="px-4 sm:px-8 py-12 max-w-6xl mx-auto">
+    <AppShell active="book">
+      <div className="px-4 sm:px-8 py-10 sm:py-12 max-w-6xl mx-auto">
         <div className="mb-10">
           <h2 className="text-4xl mb-2" style={{ fontFamily: 'var(--font-playfair), serif' }}>
             My Library
@@ -284,8 +281,6 @@ export default async function LibraryPage() {
           </>
         )}
       </div>
-
-      <SiteFooter />
-    </div>
+    </AppShell>
   )
 }

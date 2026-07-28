@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import SiteHeader from '@/components/SiteHeader'
-import SiteFooter from '@/components/SiteFooter'
+import AppShell from '@/components/AppShell'
 
 export const metadata: Metadata = {
   title: 'About — Lobby of Stories',
@@ -10,10 +9,8 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen" style={{ background: 'var(--ink)' }}>
-      <SiteHeader />
-
-      <main className="px-8 py-16 max-w-3xl mx-auto">
+    <AppShell>
+      <div className="px-4 sm:px-8 py-10 sm:py-16 max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-12 text-center">
           <p className="text-xs tracking-widest uppercase mb-4" style={{ color: 'var(--gold)' }}>
@@ -135,9 +132,7 @@ export default function AboutPage() {
             </Link>
           </div>
         </div>
-      </main>
-
-      <SiteFooter />
-    </div>
+      </div>
+    </AppShell>
   )
 }

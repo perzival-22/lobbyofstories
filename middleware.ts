@@ -7,11 +7,19 @@ const isAdminRoute = createRouteMatcher(['/admin(.*)'])
 const isPublicRoute = createRouteMatcher([
   '/',
   '/discover',
+  '/about',
+  '/terms',
   '/book/(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/books(.*)',
   '/api/webhooks/(.*)', // Clerk webhook must be reachable without a session
+  // Generated icon routes. The matcher below already lets anything with a file
+  // extension through, but these Next metadata routes have none, so without an
+  // entry here a signed-out visitor's browser is redirected to /sign-in when it
+  // asks for the favicon or the install icon.
+  '/icon',
+  '/apple-icon',
 ])
 
 export default clerkMiddleware(async (auth, req) => {
