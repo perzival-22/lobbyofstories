@@ -85,13 +85,13 @@ export default async function BookDetailPage({ params }: Props) {
         {/* Hero row */}
         <div className="flex flex-col md:flex-row gap-12 mb-20">
           {/* Cover */}
-          <div className="flex-shrink-0 w-full md:w-56">
+          <div className="flex-shrink-0 w-40 sm:w-48 md:w-56 mx-auto md:mx-0">
             <div
               className="aspect-[2/3] relative overflow-hidden"
               style={{ background: '#22201c', border: '1px solid #2a2520' }}
             >
               {book.coverUrl ? (
-                <Image src={book.coverUrl} alt={book.title} fill priority className="object-cover" />
+                <Image src={book.coverUrl} alt={book.title} fill priority sizes="(max-width: 640px) 160px, (max-width: 768px) 192px, 224px" className="object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-6 text-center">
                   <span className="text-2xl leading-snug" style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--gold-dim)' }}>

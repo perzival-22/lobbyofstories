@@ -261,7 +261,7 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
           <p>No stories match those filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-5 justify-items-center">
           {filtered.map((book) => {
             const completedChapters = progressByBook[book.id] ?? 0
             const readPct =
@@ -269,9 +269,9 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                 ? Math.min(100, Math.round((completedChapters / book._count.chapters) * 100))
                 : 0
             return (
-            <Link key={book.id} href={`/book/${book.id}`} className="group">
+            <Link key={book.id} href={`/book/${book.id}`} className="group w-full max-w-[200px] mx-auto">
               <article
-                className="h-full transition-transform duration-300 group-hover:-translate-y-1"
+                className="h-full w-full transition-transform duration-300 group-hover:-translate-y-1"
                 style={{ border: '1px solid #2a2520', borderRadius: '2px' }}
               >
                 <div
@@ -283,13 +283,13 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                       src={book.coverUrl}
                       alt={book.title}
                       fill
-                      sizes="(max-width: 768px) 100vw, 33vw"
+                      sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 200px"
                       className="object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center p-8 text-center">
+                    <div className="w-full h-full flex items-center justify-center p-2 sm:p-4 text-center">
                       <span
-                        className="text-3xl leading-tight"
+                        className="text-xs sm:text-sm md:text-lg leading-tight"
                         style={{
                           fontFamily: 'var(--font-playfair), serif',
                           color: 'var(--gold-dim)',
@@ -300,9 +300,9 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                     </div>
                   )}
                   {book.series && (
-                    <div className="absolute top-3 left-3">
+                    <div className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 max-w-[90%]">
                       <span
-                        className="text-xs px-2 py-1 tracking-widest uppercase"
+                        className="block truncate text-[0.55rem] sm:text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 tracking-widest uppercase"
                         style={{ background: 'var(--gold)', color: 'var(--ink)' }}
                       >
                         {book.series}
@@ -310,32 +310,32 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                     </div>
                   )}
                 </div>
-                <div className="p-5">
+                <div className="p-2 sm:p-4">
                   <h3
-                    className="text-xl mb-1"
+                    className="text-xs sm:text-sm md:text-base mb-0.5 sm:mb-1 line-clamp-2"
                     style={{ fontFamily: 'var(--font-playfair), serif' }}
                   >
                     {book.title}
                   </h3>
-                  <p className="text-sm mb-3" style={{ color: 'var(--muted)' }}>
+                  <p className="text-[0.65rem] sm:text-xs mb-2 truncate" style={{ color: 'var(--muted)' }}>
                     {book.author}
                   </p>
                   {book.description && (
-                    <p className="text-sm line-clamp-2" style={{ color: 'var(--muted)' }}>
+                    <p className="hidden sm:block text-xs line-clamp-2" style={{ color: 'var(--muted)' }}>
                       {book.description}
                     </p>
                   )}
                   <div
-                    className="mt-4 text-xs tracking-widest uppercase"
+                    className="hidden sm:block mt-3 text-[0.65rem] tracking-widest uppercase"
                     style={{ color: 'var(--gold-dim)' }}
                   >
                     {book._count.chapters} {book._count.chapters === 1 ? 'Chapter' : 'Chapters'}
                   </div>
-                  <div className="text-xs mt-1" style={{ color: 'var(--gold-dim)' }}>
+                  <div className="hidden sm:block text-[0.65rem] mt-1" style={{ color: 'var(--gold-dim)' }}>
                     Updated {new Date(book.updatedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                   </div>
                   {completedChapters > 0 && (
-                    <div className="mt-3">
+                    <div className="mt-2 sm:mt-3">
                       <div style={{ height: 2, background: '#2a2520', borderRadius: 1 }}>
                         <div
                           style={{
@@ -346,7 +346,7 @@ export default function DiscoverClient({ books, genres, series, currentlyReading
                           }}
                         />
                       </div>
-                      <p className="text-xs mt-1.5" style={{ color: 'var(--gold-dim)' }}>
+                      <p className="text-[0.6rem] sm:text-xs mt-1.5" style={{ color: 'var(--gold-dim)' }}>
                         {readPct >= 100 ? 'Finished ✓' : `${readPct}% read`}
                       </p>
                     </div>
