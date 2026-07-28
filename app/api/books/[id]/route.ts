@@ -52,20 +52,20 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 })
     }
 
-    // Base metadata update
-    const updateData: Parameters<typeof prisma.book.update>[0]['data'] = {
-      title,
-      author: author || 'Kelvin Wilch',
-      description: description || null,
-      series: series || null,
-      genre: genre || null,
-      status: status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
-    }
+    // Base metadata update. Every field is applied only when the caller
+    // actually sent it — a partial update (e.g. the import panel sending just
+    // title + rawText) must not blank out the blurb, series and genre or
+    // silently knock a published book back to DRAFT.
+    const updateData: Parameters<typeof prisma.book.update>[0]['data'] = { title }
 
-    // Only update coverUrl if explicitly passed (allows keeping existing cover)
-    if (coverUrl !== undefined) {
-      updateData.coverUrl = coverUrl || null
+    if (author !== undefined) updateData.author = author || 'Kelvin Wilch'
+    if (description !== undefined) updateData.description = description || null
+    if (series !== undefined) updateData.series = series || null
+    if (genre !== undefined) updateData.genre = genre || null
+    if (status !== undefined) {
+      updateData.status = status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT'
     }
+    if (coverUrl !== undefined) updateData.coverUrl = coverUrl || null
 
     // If new story text is provided: replace chapters non-destructively.
     // Standardized on parseBook.ts (via replaceBookChapters) so reader progress

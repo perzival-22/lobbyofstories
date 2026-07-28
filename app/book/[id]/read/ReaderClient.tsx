@@ -1,10 +1,11 @@
 'use client'
 
-import { Fragment, useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { SignInButton } from '@clerk/nextjs'
-import type { ChapterBlock, InlineRun } from '@/lib/parseBook'
+import type { ChapterBlock } from '@/lib/parseBook'
+import ProseBlocks from '@/components/ProseBlocks'
 import type { ProgressEntry } from './page'
 
 // Chapter metadata only — the body is lazy-loaded on demand as typed blocks.
@@ -27,74 +28,19 @@ type Props = {
 
 type Theme = 'dark' | 'sepia'
 
-// ------- Prose block rendering -------
-// Blocks arrive pre-parsed from the server (lib/parseBook.ts) and are rendered
-// as React elements — no HTML strings, so nothing to sanitize.
+// ─── Pagination constants ────────────────────────────────────────────────────
 
-function renderRuns(runs: InlineRun[]) {
-  return runs.map((run, i) => {
-    let node: ReactNode = run.text
-    if (run.strong) node = <strong>{node}</strong>
-    if (run.em) node = <em>{node}</em>
-    return <Fragment key={i}>{node}</Fragment>
-  })
-}
+/** Gutter between columns, in px. Also the gap between facing pages. */
+const COLUMN_GAP = 56
 
-// Hard-break-preserving lines for blockquote/verse; an empty line is a
-// stanza/paragraph gap.
-function renderLines(lines: InlineRun[][]) {
-  return lines.map((line, i) =>
-    line.length === 0 ? (
-      <span key={i} className="line-gap" aria-hidden="true" />
-    ) : (
-      <span key={i} className="line">
-        {renderRuns(line)}
-      </span>
-    )
-  )
-}
+/** Below this stage width a spread would make each column too narrow to read. */
+const TWO_COLUMN_MIN = 1100
 
-// The chapter-opening paragraph gets a span-based drop cap. A plain
-// ::first-letter rule scooped up opening dialogue quotes ("G…) and rendered
-// them at display size — so the cap only applies when the chapter opens with
-// an unformatted letter, and falls back to a normal paragraph otherwise.
-function OpeningParagraph({ runs }: { runs: InlineRun[] }) {
-  const first = runs[0]
-  const chars = first ? Array.from(first.text) : []
-  if (!first || first.em || first.strong || !/^\p{L}$/u.test(chars[0] ?? '')) {
-    return <p>{renderRuns(runs)}</p>
-  }
-  const rest: InlineRun[] = [{ ...first, text: chars.slice(1).join('') }, ...runs.slice(1)]
-  return (
-    <p>
-      <span className="drop-cap">{chars[0]}</span>
-      {renderRuns(rest)}
-    </p>
-  )
-}
+/** Caps on the reading measure, so prose never runs the full width of a monitor. */
+const MAX_WIDTH_ONE_COL = 660
+const MAX_WIDTH_TWO_COL = 1320
 
-function ProseBlocks({ blocks }: { blocks: ChapterBlock[] }) {
-  return (
-    <>
-      {blocks.map((block, i) => {
-        switch (block.type) {
-          case 'scene-break':
-            return <div key={i} className="scene-break" aria-hidden="true">✦</div>
-          case 'blockquote':
-            return <blockquote key={i}>{renderLines(block.lines)}</blockquote>
-          case 'verse':
-            return <div key={i} className="verse">{renderLines(block.lines)}</div>
-          case 'paragraph':
-            return i === 0 ? (
-              <OpeningParagraph key={i} runs={block.runs} />
-            ) : (
-              <p key={i}>{renderRuns(block.runs)}</p>
-            )
-        }
-      })}
-    </>
-  )
-}
+const clamp = (n: number, min: number, max: number) => Math.min(Math.max(n, min), max)
 
 export default function ReaderClient({
   bookId,
@@ -119,21 +65,50 @@ export default function ReaderClient({
   const [fontSize, setFontSize] = useState(19)
   const [theme, setTheme] = useState<Theme>('dark')
   const [showTOC, setShowTOC] = useState(false)
-  const [readProgress, setReadProgress] = useState(0)
   const [backHref, setBackHref] = useState(`/book/${bookId}`)
   const [backLabel, setBackLabel] = useState('← Back')
-  // Immersive mode: tapping the prose area on touch devices hides the toolbar
+  // Immersive mode: tapping the middle of the page on touch devices hides chrome
   const [chromeVisible, setChromeVisible] = useState(true)
-  const coarsePointerRef = useRef(false)
+
+  // ─── Paged layout state ────────────────────────────────────────────────────
+  const [page, setPage] = useState(0)
+  const [pageCount, setPageCount] = useState(1)
+  const [advance, setAdvance] = useState(0)
 
   const [localProgress, setLocalProgress] = useState<Record<string, ProgressEntry>>(progressMap)
 
-  const contentRef = useRef<HTMLDivElement>(null)
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
   const tocRef = useRef<HTMLDivElement>(null)
   const contentsBtnRef = useRef<HTMLButtonElement>(null)
   const tocWasOpen = useRef(false)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  const coarsePointerRef = useRef(false)
+
+  // Where to land after the next pagination pass (a restored fraction, or the
+  // end of the chapter when paging backwards into it). null = keep position.
+  const pendingFractionRef = useRef<number | null>(null)
+  // Latest unsaved reading position, flushed on pagehide / chapter switch.
+  const pendingSaveRef = useRef<{
+    chapterId: string
+    fraction: number
+    completed: boolean
+  } | null>(null)
+
+  const pageRef = useRef(0)
+  const pageCountRef = useRef(1)
+  useEffect(() => { pageRef.current = page }, [page])
+  useEffect(() => { pageCountRef.current = pageCount }, [pageCount])
+
+  // Page turns slide; jumping to a new chapter must not slide back through
+  // forty pages of the old one, so the transition is suppressed for a frame.
+  const [animate, setAnimate] = useState(true)
+  useEffect(() => {
+    setAnimate(false)
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setAnimate(true)))
+    return () => cancelAnimationFrame(id)
+  }, [currentChapterId])
 
   const currentChapter = chapters.find(c => c.id === currentChapterId) ?? chapters[0]
   const currentIndex = chapters.findIndex(c => c.id === currentChapterId)
@@ -143,7 +118,8 @@ export default function ReaderClient({
   const currentContent = contentCache[currentChapterId]
   const isCurrentLoaded = currentContent !== undefined
 
-  // Lazy-fetch the current chapter's body when it isn't cached yet.
+  // ─── Content loading ───────────────────────────────────────────────────────
+
   useEffect(() => {
     if (contentCache[currentChapterId] !== undefined) return
 
@@ -165,40 +141,28 @@ export default function ReaderClient({
     return () => { cancelled = true }
   }, [currentChapterId, bookId, contentCache])
 
-  // TASK-02: Restore font size from localStorage on mount
+  // ─── Preferences ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('reader-font-size')
-      if (stored) {
-        const parsed = parseInt(stored, 10)
+      const storedSize = localStorage.getItem('reader-font-size')
+      if (storedSize) {
+        const parsed = parseInt(storedSize, 10)
         if (!isNaN(parsed)) setFontSize(parsed)
       }
+      const storedTheme = localStorage.getItem('reader-theme')
+      if (storedTheme === 'sepia' || storedTheme === 'dark') setTheme(storedTheme)
     } catch {}
   }, [])
 
-  // TASK-02: Persist font size to localStorage on change
   useEffect(() => {
-    try {
-      localStorage.setItem('reader-font-size', String(fontSize))
-    } catch {}
+    try { localStorage.setItem('reader-font-size', String(fontSize)) } catch {}
   }, [fontSize])
 
-  // Restore theme from localStorage on mount (same pattern as font size)
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('reader-theme')
-      if (stored === 'sepia' || stored === 'dark') setTheme(stored)
-    } catch {}
-  }, [])
-
-  // Persist theme to localStorage on change
-  useEffect(() => {
-    try {
-      localStorage.setItem('reader-theme', theme)
-    } catch {}
+    try { localStorage.setItem('reader-theme', theme) } catch {}
   }, [theme])
 
-  // TASK-14: Detect referrer for back navigation
   useEffect(() => {
     if (document.referrer.includes('/discover')) {
       setBackHref('/discover')
@@ -206,12 +170,88 @@ export default function ReaderClient({
     }
   }, [])
 
-  // Tap-to-hide is touch-only; on mouse devices the toolbar stays put.
   useEffect(() => {
     coarsePointerRef.current = window.matchMedia('(pointer: coarse)').matches
   }, [])
 
-  // ------- Progress Saving -------
+  // ─── Pagination ────────────────────────────────────────────────────────────
+
+  /**
+   * Lays the chapter out as fixed-height CSS columns and measures how many
+   * pages it makes. The track is exactly one page wide and overflows to the
+   * right; flipping a page is a transform, not a scroll.
+   */
+  const paginate = useCallback(() => {
+    const stage = stageRef.current
+    const viewport = viewportRef.current
+    const track = trackRef.current
+    if (!stage || !viewport || !track) return
+
+    // clientWidth includes padding, so measure the content box — sizing the
+    // viewport off the padded width overflows the stage and clips a column.
+    const styles = getComputedStyle(stage)
+    const padX = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight)
+    const available = stage.clientWidth - padX
+    if (available <= 0 || stage.clientHeight <= 0) return
+
+    const cols = available >= TWO_COLUMN_MIN ? 2 : 1
+    const maxWidth = cols === 2 ? MAX_WIDTH_TWO_COL : MAX_WIDTH_ONE_COL
+    const width = Math.min(available, maxWidth)
+    const columnWidth = (width - COLUMN_GAP * (cols - 1)) / cols
+
+    viewport.style.width = `${width}px`
+    track.style.width = `${width}px`
+    track.style.columnWidth = `${columnWidth}px`
+    track.style.columnGap = `${COLUMN_GAP}px`
+
+    // Reading scrollWidth forces the layout we just asked for.
+    const contentWidth = track.scrollWidth
+    const totalColumns = Math.max(
+      1,
+      Math.round((contentWidth + COLUMN_GAP) / (columnWidth + COLUMN_GAP))
+    )
+    const count = Math.max(1, Math.ceil(totalColumns / cols))
+    const step = width + COLUMN_GAP
+
+    setAdvance(step)
+    setPageCount(count)
+
+    // Keep the reader where they were: either an explicitly requested position
+    // (chapter switch / restore) or the same relative point after a resize.
+    const requested = pendingFractionRef.current
+    if (requested !== null) {
+      pendingFractionRef.current = null
+      setPage(clamp(Math.round(requested * (count - 1)), 0, count - 1))
+      return
+    }
+
+    const previousCount = pageCountRef.current
+    const fraction = previousCount > 1 ? pageRef.current / (previousCount - 1) : 0
+    setPage(clamp(Math.round(fraction * (count - 1)), 0, count - 1))
+  }, [])
+
+  // Re-paginate whenever anything that affects layout changes.
+  useLayoutEffect(() => {
+    paginate()
+  }, [paginate, currentChapterId, isCurrentLoaded, currentContent, fontSize, chromeVisible])
+
+  // Web fonts land after first paint and change every metric — measure again.
+  useEffect(() => {
+    if (!document.fonts?.ready) return
+    let cancelled = false
+    document.fonts.ready.then(() => { if (!cancelled) paginate() })
+    return () => { cancelled = true }
+  }, [paginate])
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => paginate())
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [paginate])
+
+  // ─── Progress ──────────────────────────────────────────────────────────────
 
   const saveProgress = useCallback(
     (chapterId: string, scrollPosition: number, completed: boolean) => {
@@ -226,50 +266,38 @@ export default function ReaderClient({
     [isSignedIn]
   )
 
-  // Debounced scroll handler – fires 1.5 s after the user stops scrolling
-  const handleScroll = useCallback(() => {
-    const el = contentRef.current
-    if (!el) return
-    const maxScroll = el.scrollHeight - el.clientHeight
-    if (maxScroll <= 0) return
-    const position = el.scrollTop / maxScroll
-    const completed = position > 0.95
-    // TASK-05: Update progress bar
-    setReadProgress(Math.round((el.scrollTop / maxScroll) * 100))
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    saveTimeoutRef.current = setTimeout(() => {
-      // Null the ref when the save actually runs — the pagehide flush uses a
-      // non-null ref as its "there's an unsaved position" signal.
-      saveTimeoutRef.current = null
-      saveProgress(currentChapterId, position, completed)
-    }, 1500)
-  }, [currentChapterId, saveProgress])
-
-  // Latest chapter id for event handlers registered once (pagehide flush).
-  const currentChapterIdRef = useRef(currentChapterId)
+  // `scrollPosition` stays a 0–1 fraction so rows written by the old scrolling
+  // reader still restore correctly — it is just derived from the page index now.
   useEffect(() => {
-    currentChapterIdRef.current = currentChapterId
-  }, [currentChapterId])
+    if (!isSignedIn || !isCurrentLoaded || pageCount <= 0) return
 
-  // Flush the debounced save when the tab is hidden or closed — without this,
-  // closing the tab within 1.5s of the last scroll silently loses the
-  // reader's position. sendBeacon survives page teardown; fetch would not.
+    const fraction = pageCount > 1 ? page / (pageCount - 1) : 0
+    const completed = page >= pageCount - 1
+    pendingSaveRef.current = { chapterId: currentChapterId, fraction, completed }
+
+    const timer = setTimeout(() => {
+      const pending = pendingSaveRef.current
+      if (!pending) return
+      pendingSaveRef.current = null
+      saveProgress(pending.chapterId, pending.fraction, pending.completed)
+    }, 900)
+
+    return () => clearTimeout(timer)
+  }, [page, pageCount, isCurrentLoaded, currentChapterId, isSignedIn, saveProgress])
+
+  // Closing the tab within the debounce window would otherwise lose the page.
+  // sendBeacon survives teardown; fetch would not.
   useEffect(() => {
     if (!isSignedIn) return
 
     const flush = () => {
-      if (!saveTimeoutRef.current) return // nothing pending
-      clearTimeout(saveTimeoutRef.current)
-      saveTimeoutRef.current = null
-      const el = contentRef.current
-      if (!el) return
-      const maxScroll = el.scrollHeight - el.clientHeight
-      if (maxScroll <= 0) return
-      const position = el.scrollTop / maxScroll
+      const pending = pendingSaveRef.current
+      if (!pending) return
+      pendingSaveRef.current = null
       const payload = JSON.stringify({
-        chapterId: currentChapterIdRef.current,
-        scrollPosition: position,
-        completed: position > 0.95,
+        chapterId: pending.chapterId,
+        scrollPosition: pending.fraction,
+        completed: pending.completed,
       })
       navigator.sendBeacon('/api/progress', new Blob([payload], { type: 'application/json' }))
     }
@@ -286,32 +314,43 @@ export default function ReaderClient({
     }
   }, [isSignedIn])
 
-  // ------- Chapter Switching -------
+  // ─── Navigation ────────────────────────────────────────────────────────────
 
   const switchChapter = useCallback(
-    async (newChapterId: string) => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-
-      const el = contentRef.current
-      if (isSignedIn && el) {
-        const maxScroll = el.scrollHeight - el.clientHeight
-        if (maxScroll > 0) {
-          const position = el.scrollTop / maxScroll
-          saveProgress(currentChapterId, position, position > 0.95)
-        }
+    (newChapterId: string, landing: 'restore' | 'end' = 'restore') => {
+      // Commit the outgoing chapter's position before leaving it.
+      const pending = pendingSaveRef.current
+      if (pending) {
+        pendingSaveRef.current = null
+        saveProgress(pending.chapterId, pending.fraction, pending.completed)
       }
 
+      pendingFractionRef.current =
+        landing === 'end' ? 1 : (localProgress[newChapterId]?.scrollPosition ?? 0)
+      setPage(0)
       setCurrentChapterId(newChapterId)
       setShowTOC(false)
     },
-    [currentChapterId, isSignedIn, saveProgress]
+    [localProgress, saveProgress]
   )
 
-  // TASK-07: Keyboard shortcuts. ←/→ flip chapters; ↑/↓/PageUp/PageDown/Space
-  // scroll — they must never change chapters, or a reader pressing ↓ to read
-  // further gets thrown out of the page they're on. The prose lives in an
-  // inner scroll container that never holds focus, so the browser's native
-  // key scrolling can't reach it; the reading keys are driven manually here.
+  const goNext = useCallback(() => {
+    if (pageRef.current < pageCountRef.current - 1) {
+      setPage(p => p + 1)
+    } else if (nextChapter) {
+      switchChapter(nextChapter.id)
+    }
+  }, [nextChapter, switchChapter])
+
+  const goPrev = useCallback(() => {
+    if (pageRef.current > 0) {
+      setPage(p => p - 1)
+    } else if (prevChapter) {
+      switchChapter(prevChapter.id, 'end')
+    }
+  }, [prevChapter, switchChapter])
+
+  // Keyboard. Every reading key turns a page; chapters move with Shift.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
@@ -322,58 +361,71 @@ export default function ReaderClient({
       ) return
       if (showTOC) return // the TOC overlay has its own key handling
 
-      if (e.key === 'ArrowRight' && nextChapter) {
-        switchChapter(nextChapter.id)
+      if (e.shiftKey && e.key === 'ArrowRight') {
+        if (nextChapter) { e.preventDefault(); switchChapter(nextChapter.id) }
         return
       }
-      if (e.key === 'ArrowLeft' && prevChapter) {
-        switchChapter(prevChapter.id)
+      if (e.shiftKey && e.key === 'ArrowLeft') {
+        if (prevChapter) { e.preventDefault(); switchChapter(prevChapter.id) }
         return
       }
 
-      const el = contentRef.current
-      if (!el) return
-      const page = el.clientHeight * 0.85
       switch (e.key) {
+        case 'ArrowRight':
         case 'ArrowDown':
-          e.preventDefault()
-          el.scrollBy({ top: 60 })
-          break
-        case 'ArrowUp':
-          e.preventDefault()
-          el.scrollBy({ top: -60 })
-          break
         case 'PageDown':
           e.preventDefault()
-          el.scrollBy({ top: page, behavior: 'smooth' })
+          goNext()
           break
+        case 'ArrowLeft':
+        case 'ArrowUp':
         case 'PageUp':
           e.preventDefault()
-          el.scrollBy({ top: -page, behavior: 'smooth' })
+          goPrev()
           break
         case ' ':
           // A focused button/link keeps Space for its native activation.
           if (target.closest('button, a')) return
           e.preventDefault()
-          el.scrollBy({ top: e.shiftKey ? -page : page, behavior: 'smooth' })
+          if (e.shiftKey) goPrev()
+          else goNext()
           break
         case 'Home':
           e.preventDefault()
-          el.scrollTo({ top: 0 })
+          setPage(0)
           break
         case 'End':
           e.preventDefault()
-          el.scrollTo({ top: el.scrollHeight })
+          setPage(pageCountRef.current - 1)
           break
       }
     }
+
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [nextChapter, prevChapter, switchChapter, showTOC])
+  }, [goNext, goPrev, nextChapter, prevChapter, switchChapter, showTOC])
 
-  // ------- Mobile swipe navigation -------
-  // Horizontal-dominant swipes flip chapters; vertical scroll is untouched
-  // (we never preventDefault and ignore gestures where dy dominates).
+  // Click the outer quarter of the page to flip; the middle toggles chrome on
+  // touch devices. Deliberately not an overlay element — an overlay would make
+  // the prose unselectable.
+  const handleStageClick = useCallback(
+    (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest('a, button')) return
+      if (window.getSelection()?.toString()) return
+      if (showTOC) {
+        setShowTOC(false)
+        return
+      }
+
+      const rect = e.currentTarget.getBoundingClientRect()
+      const x = (e.clientX - rect.left) / rect.width
+      if (x < 0.25) goPrev()
+      else if (x > 0.75) goNext()
+      else if (coarsePointerRef.current) setChromeVisible(v => !v)
+    },
+    [goNext, goPrev, showTOC]
+  )
+
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0]
     touchStartRef.current = { x: t.clientX, y: t.clientY }
@@ -387,35 +439,24 @@ export default function ReaderClient({
       const t = e.changedTouches[0]
       const dx = t.clientX - start.x
       const dy = t.clientY - start.y
-      // Require a clearly horizontal swipe of meaningful length.
-      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return
-      if (dx < 0 && nextChapter) {
-        switchChapter(nextChapter.id)
-      } else if (dx > 0 && prevChapter) {
-        switchChapter(prevChapter.id)
-      }
-    },
-    [nextChapter, prevChapter, switchChapter]
-  )
 
-  // Tap the prose area (touch devices) to toggle the toolbar — immersive
-  // reading mode. Taps on links/buttons and active text selections are
-  // ignored; a tap while the TOC is open just closes the TOC.
-  const handleContentTap = useCallback(
-    (e: React.MouseEvent) => {
-      if (!coarsePointerRef.current) return
-      if ((e.target as HTMLElement).closest('a, button')) return
-      if (window.getSelection()?.toString()) return
-      if (showTOC) {
-        setShowTOC(false)
+      if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0) goNext()
+        else goPrev()
         return
       }
-      setChromeVisible(v => !v)
+      // There is nothing to scroll any more, so a vertical swipe would feel
+      // dead — map it to a page turn too.
+      if (Math.abs(dy) >= 60 && Math.abs(dy) > Math.abs(dx)) {
+        if (dy < 0) goNext()
+        else goPrev()
+      }
     },
-    [showTOC]
+    [goNext, goPrev]
   )
 
-  // ------- TOC accessibility: Esc to close + focus trap while open -------
+  // ─── TOC accessibility: Esc to close + focus trap while open ───────────────
+
   useEffect(() => {
     if (!showTOC) return
     const overlay = tocRef.current
@@ -454,7 +495,6 @@ export default function ReaderClient({
     return () => document.removeEventListener('keydown', onKey)
   }, [showTOC])
 
-  // Return focus to the Contents trigger when the TOC closes.
   useEffect(() => {
     if (tocWasOpen.current && !showTOC) {
       contentsBtnRef.current?.focus()
@@ -462,209 +502,85 @@ export default function ReaderClient({
     tocWasOpen.current = showTOC
   }, [showTOC])
 
-  // ------- URL Sync + Scroll Restoration -------
+  // ─── URL sync ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
     router.replace(`/book/${bookId}/read?chapter=${currentChapterId}`, { scroll: false })
-
-    // TASK-05: Reset or restore progress bar
-    const progress = localProgress[currentChapterId]
-    if (progress && progress.scrollPosition > 0.01) {
-      setReadProgress(Math.round(progress.scrollPosition * 100))
-    } else {
-      setReadProgress(0)
-    }
   }, [currentChapterId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll restoration must wait until the chapter body is actually rendered,
-  // otherwise scrollHeight is wrong and the restore is a no-op.
-  useEffect(() => {
-    if (!isCurrentLoaded) return
-    const el = contentRef.current
-    if (!el) return
-
-    const progress = localProgress[currentChapterId]
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        if (progress && progress.scrollPosition > 0.01) {
-          el.scrollTop = progress.scrollPosition * (el.scrollHeight - el.clientHeight)
-        } else {
-          el.scrollTop = 0
-        }
-      })
-    )
-  }, [currentChapterId, isCurrentLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // A chapter that fits entirely on screen has nothing to scroll, so the
-  // scroll handler never fires and the chapter could never be marked read —
-  // it would block the book from ever reaching 100%. Complete it on view.
-  // (Delayed until after the double-rAF scroll restore so layout is settled.)
-  useEffect(() => {
-    if (!isCurrentLoaded) return
-    const el = contentRef.current
-    if (!el) return
-    const chapterId = currentChapterId
-    const t = setTimeout(() => {
-      if (el.scrollHeight - el.clientHeight <= 0) {
-        setReadProgress(100)
-        if (!localProgress[chapterId]?.completed) {
-          saveProgress(chapterId, 1, true)
-        }
-      }
-    }, 400)
-    return () => clearTimeout(t)
-  }, [currentChapterId, isCurrentLoaded, saveProgress]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current) }
-  }, [])
-
   const completedCount = Object.values(localProgress).filter(p => p.completed).length
+  const readProgress = pageCount > 1 ? ((page + 1) / pageCount) * 100 : 100
+  const atLastPage = page >= pageCount - 1
+  const atFirstPage = page === 0
 
-  // ------- Render -------
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className="reader-root flex flex-col"
-      data-theme={theme}
-      style={{ height: '100dvh', background: 'var(--reader-bg)' }}
-    >
-
-      {/* TASK-05: Reading progress bar */}
-      <div style={{ position: 'relative', width: '100%', height: '2px', flexShrink: 0 }}>
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            height: '2px',
-            background: 'var(--gold)',
-            width: `${readProgress}%`,
-            transition: 'width 0.2s ease',
-          }}
-        />
+    <div className="reader-root" data-theme={theme}>
+      {/* Reading progress bar */}
+      <div className="reader-progress">
+        <div className="reader-progress__fill" style={{ width: `${readProgress}%` }} />
       </div>
 
       {/* Collapsible chrome: toolbar + guest nudge hide in immersive mode */}
-      <div
-        style={{
-          flexShrink: 0,
-          overflow: 'hidden',
-          maxHeight: chromeVisible ? 240 : 0,
-          opacity: chromeVisible ? 1 : 0,
-          transition: 'max-height 0.3s ease, opacity 0.25s ease',
-        }}
-      >
-      {/* Toolbar */}
-      <header
-        className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 gap-3 sm:gap-4"
-        style={{ borderBottom: '1px solid var(--reader-border)', background: 'var(--reader-surface)', minHeight: '52px' }}
-      >
-        {/* Left */}
-        <div className="flex items-center gap-3 sm:gap-5">
-          <Link
-            href={backHref}
-            className="text-xs tracking-widest uppercase transition-colors reader-link"
-            style={{ color: 'var(--reader-muted)' }}
-          >
-            {backLabel}
-          </Link>
-          <button
-            ref={contentsBtnRef}
-            onClick={() => setShowTOC(v => !v)}
-            aria-expanded={showTOC}
-            aria-haspopup="dialog"
-            className="text-xs tracking-widest uppercase transition-colors reader-link"
-            style={{ color: showTOC ? 'var(--gold)' : 'var(--reader-muted)' }}
-          >
-            Contents
-          </button>
-        </div>
-
-        {/* Centre: titles */}
-        <div className="flex-1 text-center min-w-0">
-          <p
-            className="text-sm truncate"
-            style={{ fontFamily: 'var(--font-playfair), serif', color: 'var(--reader-text)' }}
-          >
-            {bookTitle}
-          </p>
-          <p className="text-xs truncate mt-0.5" style={{ color: 'var(--reader-muted)' }}>
-            {currentChapter.title}
-          </p>
-        </div>
-
-        {/* Right: theme + font controls */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          <button
-            onClick={() => setTheme(t => (t === 'dark' ? 'sepia' : 'dark'))}
-            aria-label={theme === 'dark' ? 'Switch to sepia theme' : 'Switch to dark theme'}
-            title={theme === 'dark' ? 'Sepia theme' : 'Dark theme'}
-            className="leading-none transition-colors reader-link"
-            style={{ color: 'var(--reader-muted)', fontSize: '0.95rem' }}
-          >
-            {theme === 'dark' ? '☀' : '☾'}
-          </button>
-          <button
-            onClick={() => setFontSize(s => Math.max(13, s - 1))}
-            aria-label="Decrease font size"
-            className="leading-none transition-colors reader-link"
-            style={{ color: 'var(--reader-muted)', fontSize: '1rem' }}
-          >
-            A−
-          </button>
-          <span
-            className="hidden sm:block"
-            style={{
-              color: 'var(--reader-muted)',
-              fontSize: '0.7rem',
-              minWidth: '2.2rem',
-              textAlign: 'center',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {fontSize}px
-          </span>
-          <button
-            onClick={() => setFontSize(s => Math.min(28, s + 1))}
-            aria-label="Increase font size"
-            className="leading-none transition-colors reader-link"
-            style={{ color: 'var(--reader-muted)', fontSize: '1.15rem' }}
-          >
-            A+
-          </button>
-        </div>
-      </header>
-
-      {/* TASK-06: Sign-in nudge for guest readers */}
-      {!isSignedIn && (
-        <div
-          style={{
-            padding: '6px 24px',
-            fontSize: '0.72rem',
-            background: 'var(--reader-surface-2)',
-            borderBottom: '1px solid var(--reader-border)',
-            color: 'var(--reader-muted)',
-          }}
-        >
-          Sign in to save your reading progress across devices.
-          <SignInButton mode="modal">
+      <div className={`reader-chrome${chromeVisible ? '' : ' reader-chrome--hidden'}`}>
+        <header className="reader-bar">
+          <div className="reader-bar__side">
+            <Link href={backHref} className="reader-link reader-bar__btn">
+              {backLabel}
+            </Link>
             <button
-              style={{
-                color: 'var(--gold)',
-                marginLeft: 8,
-                textDecoration: 'underline',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 'inherit',
-              }}
+              ref={contentsBtnRef}
+              onClick={() => setShowTOC(v => !v)}
+              aria-expanded={showTOC}
+              aria-haspopup="dialog"
+              className="reader-link reader-bar__btn"
+              style={{ color: showTOC ? 'var(--gold)' : undefined }}
             >
-              Sign in
+              Contents
             </button>
-          </SignInButton>
-        </div>
-      )}
+          </div>
+
+          <div className="reader-bar__centre">
+            <p className="reader-bar__book">{bookTitle}</p>
+            <p className="reader-bar__chapter">{currentChapter.title}</p>
+          </div>
+
+          <div className="reader-bar__side reader-bar__side--end">
+            <button
+              onClick={() => setTheme(t => (t === 'dark' ? 'sepia' : 'dark'))}
+              aria-label={theme === 'dark' ? 'Switch to sepia theme' : 'Switch to dark theme'}
+              title={theme === 'dark' ? 'Sepia theme' : 'Dark theme'}
+              className="reader-link reader-bar__icon"
+            >
+              {theme === 'dark' ? '☀' : '☾'}
+            </button>
+            <button
+              onClick={() => setFontSize(s => Math.max(13, s - 1))}
+              aria-label="Decrease font size"
+              className="reader-link reader-bar__icon"
+            >
+              A−
+            </button>
+            <span className="reader-bar__size">{fontSize}px</span>
+            <button
+              onClick={() => setFontSize(s => Math.min(28, s + 1))}
+              aria-label="Increase font size"
+              className="reader-link reader-bar__icon reader-bar__icon--lg"
+            >
+              A+
+            </button>
+          </div>
+        </header>
+
+        {!isSignedIn && (
+          <div className="reader-nudge">
+            Sign in to save your reading progress across devices.
+            <SignInButton mode="modal">
+              <button className="reader-nudge__btn">Sign in</button>
+            </SignInButton>
+          </div>
+        )}
       </div>
 
       {/* TOC overlay */}
@@ -674,137 +590,121 @@ export default function ReaderClient({
           role="dialog"
           aria-modal="true"
           aria-label="Table of contents"
-          className="absolute z-50 left-0 right-0 overflow-y-auto"
-          style={{ top: '52px', maxHeight: '55vh', background: 'var(--reader-surface)', borderBottom: '1px solid var(--reader-border)' }}
+          className="reader-toc"
         >
-          <div className="px-6 py-3">
-            <p className="text-xs tracking-widest uppercase mb-3" style={{ color: 'var(--reader-muted)' }}>
-              {completedCount} / {chapters.length} chapters read
-            </p>
-            {chapters.map(ch => {
-              const done = localProgress[ch.id]?.completed ?? false
-              const active = ch.id === currentChapterId
-              return (
-                <button
-                  key={ch.id}
-                  onClick={() => switchChapter(ch.id)}
-                  className="flex items-center gap-4 w-full text-left py-3 text-sm transition-colors reader-link"
-                  style={{
-                    color: active ? 'var(--gold)' : done ? 'var(--reader-text)' : 'var(--reader-muted)',
-                    borderBottom: '1px solid var(--reader-border-dim)',
-                  }}
-                >
-                  <span
-                    className="text-xs flex-shrink-0"
-                    style={{ color: 'var(--gold-dim)', minWidth: '2rem', fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {String(ch.order).padStart(2, '0')}
-                  </span>
-                  <span className="flex-1">{ch.title}</span>
-                  {done && <span className="text-xs flex-shrink-0" style={{ color: 'var(--gold-dim)' }}>✓</span>}
-                </button>
-              )
-            })}
-          </div>
+          <p className="reader-toc__count">
+            {completedCount} / {chapters.length} chapters read
+          </p>
+          {chapters.map(ch => {
+            const done = localProgress[ch.id]?.completed ?? false
+            const active = ch.id === currentChapterId
+            return (
+              <button
+                key={ch.id}
+                onClick={() => switchChapter(ch.id)}
+                className="reader-toc__item reader-link"
+                style={{
+                  color: active ? 'var(--gold)' : done ? 'var(--reader-text)' : undefined,
+                }}
+              >
+                <span className="reader-toc__num">{String(ch.order).padStart(2, '0')}</span>
+                <span className="reader-toc__name">{ch.title}</span>
+                {done && <span className="reader-toc__done">✓</span>}
+              </button>
+            )
+          })}
         </div>
       )}
 
-      {/* Reading content */}
+      {/* Paged reading surface */}
       <div
-        ref={contentRef}
-        onScroll={handleScroll}
+        ref={stageRef}
+        className="reader-stage"
+        onClick={handleStageClick}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        onClick={handleContentTap}
-        className="flex-1 overflow-y-auto"
-        style={{ overscrollBehavior: 'contain' }}
       >
-        <div className="px-6 py-12">
-          {/* Chapter heading */}
-          <div className="max-w-[68ch] mx-auto mb-8">
-            <p className="text-xs tracking-widest uppercase mb-4" style={{ color: 'var(--gold-dim)' }}>
-              Chapter {String(currentChapter.order).padStart(2, '0')}
-            </p>
-            <h2 className="text-3xl" style={{ fontFamily: 'var(--font-playfair), serif' }}>
-              {currentChapter.title}
-            </h2>
-            {currentChapter.wordCount > 0 && (
-              <p style={{ fontSize: '0.72rem', color: 'var(--reader-muted)', marginTop: '0.5rem' }}>
-                ~{Math.ceil(currentChapter.wordCount / 200)} min read
-              </p>
-            )}
-          </div>
-
-          {/* Opening ornament */}
-          <div className="chapter-ornament max-w-[68ch] mx-auto mb-8">✦ ✦ ✦</div>
-
-          {/* Prose body */}
-          <div key={currentChapterId + (isCurrentLoaded ? ':loaded' : ':loading')} className="prose-reader" style={{ fontSize: `${fontSize}px` }}>
-            {isCurrentLoaded ? (
-              <ProseBlocks blocks={currentContent ?? []} />
-            ) : contentError ? (
-              <p style={{ color: 'var(--reader-muted)', fontStyle: 'italic' }}>
-                This chapter could not be loaded. Switch away and back to retry.
-              </p>
-            ) : (
-              <p className="reader-loading" style={{ color: 'var(--reader-muted)', fontStyle: 'italic' }}>
-                Loading chapter…
-              </p>
-            )}
-          </div>
-
-          {/* End-of-chapter marker */}
-          <div className="max-w-[68ch] mx-auto mt-16 mb-8 text-center">
-            <div className="chapter-ornament">✦ ✦ ✦</div>
-            <p style={{ fontSize: '0.68rem', color: 'var(--gold-dim)', letterSpacing: '0.15em', textTransform: 'uppercase', marginTop: '0.75rem' }}>
-              End of Chapter {String(currentChapter.order).padStart(2, '0')}
-            </p>
-          </div>
-
-          {/* Prev / Next navigation */}
+        <div ref={viewportRef} className="reader-viewport">
           <div
-            className="max-w-[68ch] mx-auto mt-2 pb-16 flex items-start justify-between"
-            style={{ borderTop: '1px solid var(--reader-border)', paddingTop: '2rem' }}
+            ref={trackRef}
+            className={`reader-track${animate ? '' : ' reader-track--instant'}`}
+            style={{ transform: `translateX(-${page * advance}px)` }}
           >
-            {prevChapter ? (
-              <button
-                onClick={() => switchChapter(prevChapter.id)}
-                className="text-sm text-left transition-colors reader-link"
-                style={{ color: 'var(--reader-muted)', maxWidth: '45%' }}
-              >
-                <span className="block text-xs tracking-widest uppercase mb-1" style={{ color: 'var(--gold-dim)' }}>
-                  ← Previous
-                </span>
-                {prevChapter.title}
-              </button>
-            ) : <div />}
+            <div
+              key={currentChapterId + (isCurrentLoaded ? ':loaded' : ':loading')}
+              className="prose-reader"
+              style={{ fontSize: `${fontSize}px` }}
+            >
+              {/* Chapter opening */}
+              <div className="chapter-open">
+                <p className="chapter-open__eyebrow">
+                  Chapter {String(currentChapter.order).padStart(2, '0')}
+                  {currentChapter.wordCount > 0 &&
+                    ` · ~${Math.ceil(currentChapter.wordCount / 200)} min`}
+                </p>
+                <h2 className="chapter-open__title">{currentChapter.title}</h2>
+              </div>
 
-            {nextChapter ? (
-              <button
-                onClick={() => switchChapter(nextChapter.id)}
-                className="text-sm text-right transition-colors reader-link"
-                style={{ color: 'var(--reader-muted)', maxWidth: '45%' }}
-              >
-                <span className="block text-xs tracking-widest uppercase mb-1" style={{ color: 'var(--gold-dim)' }}>
-                  Next →
-                </span>
-                {nextChapter.title}
-              </button>
-            ) : (
-              <Link
-                href={`/book/${bookId}`}
-                className="text-sm text-right transition-colors reader-link"
-                style={{ color: 'var(--reader-muted)', maxWidth: '45%' }}
-              >
-                <span className="block text-xs tracking-widest uppercase mb-1" style={{ color: 'var(--gold-dim)' }}>
-                  Finished →
-                </span>
-                Back to book page
-              </Link>
-            )}
+              {isCurrentLoaded ? (
+                <ProseBlocks blocks={currentContent ?? []} />
+              ) : contentError ? (
+                <p className="reader-notice">
+                  This chapter could not be loaded. Switch away and back to retry.
+                </p>
+              ) : (
+                <p className="reader-notice reader-loading">Loading chapter…</p>
+              )}
+
+              {/* Chapter close */}
+              {isCurrentLoaded && (
+                <div className="chapter-close">
+                  <div className="chapter-ornament">✦ ✦ ✦</div>
+                  <p className="chapter-close__label">
+                    End of Chapter {String(currentChapter.order).padStart(2, '0')}
+                  </p>
+                  {nextChapter ? (
+                    <button
+                      onClick={() => switchChapter(nextChapter.id)}
+                      className="reader-link chapter-close__next"
+                    >
+                      Next: {nextChapter.title} →
+                    </button>
+                  ) : (
+                    <Link href={`/book/${bookId}`} className="reader-link chapter-close__next">
+                      Back to book page →
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Pager */}
+      <footer className={`reader-pager${chromeVisible ? '' : ' reader-pager--dim'}`}>
+        <button
+          onClick={goPrev}
+          disabled={atFirstPage && !prevChapter}
+          className="reader-link reader-pager__arrow"
+          aria-label={atFirstPage ? 'Previous chapter' : 'Previous page'}
+          title={atFirstPage ? 'Previous chapter' : 'Previous page'}
+        >
+          ‹
+        </button>
+        <span className="reader-pager__label">
+          Page {Math.min(page + 1, pageCount)} of {pageCount}
+        </span>
+        <button
+          onClick={goNext}
+          disabled={atLastPage && !nextChapter}
+          className="reader-link reader-pager__arrow"
+          aria-label={atLastPage ? 'Next chapter' : 'Next page'}
+          title={atLastPage ? 'Next chapter' : 'Next page'}
+        >
+          ›
+        </button>
+      </footer>
     </div>
   )
 }

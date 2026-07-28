@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
-import { parseBookText } from '@/lib/parseBook'
+import { parseBookText, countWords } from '@/lib/parseBook'
 
 // Admin only — create a new book. When `rawText` is provided it is parsed with
 // the Book title + Chapters format (lib/parseBook.ts) and the chapters are
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { title, author, description, series, genre, coverUrl, rawText } = body
+    const { title, author, description, series, genre, coverUrl, rawText, status } = body
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -61,13 +61,16 @@ export async function POST(req: NextRequest) {
         series: series || null,
         genre: genre || null,
         coverUrl: coverUrl || null,
-        status: 'DRAFT',
+        status: status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
         chapters: chapters.length
           ? {
               create: chapters.map((c) => ({
                 order: c.order,
                 title: c.title,
                 content: c.body,
+                // Without this the column stays 0 and the reader shows no
+                // "~N min read" until the backfill script is run by hand.
+                wordCount: countWords(c.body),
               })),
             }
           : undefined,
